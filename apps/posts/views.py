@@ -1,51 +1,43 @@
-import json
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-
-from .models import User
-from .models import Post
-
-
 # Create your views here.
-def get_users(request):
-    try:
-        users = list(User.objects.values('id', 'username', 'email', 'created_at'))
-        return JsonResponse(users, safe=False)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from .models import Post, Comment
+from .serializers import PostSerializer, CommentSerializer
 
+# Post List View (GET all posts)
+class PostListView(APIView):
+    def get(self, request):
+        pass
 
-@csrf_exempt
-def create_user(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            user = User.objects.create(username=data['username'], email=data['email'])
-            return JsonResponse({'id': user.id, 'message': 'User created successfully'}, status=201)
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=400)
+    def post(self, request):
+        pass
+# Post Detail View (GET, PUT, DELETE a single post)
+class PostDetailView(APIView):
+    def get(self, request, pk):
+        pass
 
+    def put(self, request, pk):
+        pass
 
-def get_posts(request):
-    try:
-        posts = list(Post.objects.values('id', 'content', 'author', 'created_at'))
-        return JsonResponse(posts, safe=False)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    def delete(self, request, pk):
+        pass
 
+# Comment List View for a specific post
+class CommentListView(APIView):
+    def get(self, request, post_id):
+        pass
 
-@csrf_exempt
-def create_post(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            author = User.objects.get(id=data['author'])
-            post = Post.objects.create(content=data['content'], author=author)
-            return JsonResponse({'id': post.id, 'message': 'Post created successfully'}, status=201)
-        except User.DoesNotExist:
-            return JsonResponse({'error': 'Author not found'}, status=404)
-        except Exception as e:
-            return JsonResponse({'error': str(3)}, status=400)
+    def post(self, request, post_id):
+        pass
 
+# Comment Detail View (GET, PUT, DELETE a specific comment)
+class CommentDetailView(APIView):
+    def get(self, request, post_id, comment_id):
+        pass
 
+    def put(self, request, post_id, comment_id):
+        pass
+
+    def delete(self, request, post_id, comment_id):
+        pass
