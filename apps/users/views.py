@@ -6,6 +6,8 @@ from .models import User
 from .serializers import UserSerializer
 
 class UserListView(APIView):
+    serializer_class = UserSerializer
+    
     def get(self, request):
         users = User.objects.all()
         serializer = UserSerializer(users, many=True)
@@ -19,6 +21,8 @@ class UserListView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UserDetailView(APIView):
+    serializer_class = UserSerializer
+
     def get(self, request, pk):
         try:
             user = User.objects.get(pk=pk)
