@@ -1,4 +1,5 @@
 # Create your views here.
+from django.core.exceptions import ValidationError
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -30,13 +31,54 @@ class PostListView(APIView):
 # Post Detail View (GET, PUT, DELETE a single post)
 class PostDetailView(APIView):
     def get(self, request, pk):
-        pass
+        try:
+            # Get specific post based on primary key
+            post = Post.objects.get(pk=pk)
+            # Serialize the post object
+            serializer = PostSerializer(post)
+            # Return the serialized JSON to http response
+            return Response(serializer.data)
+        except Post.DoesNotExist:
+            # Throw an error if the post with the specified id is not found
+            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    def put(self, request, pk):
-        pass
+    def patch(self, request, pk):
+        try:
+            # Get specified post based on primary key
+            post = Post.objects.get(pk=pk)
+        except Post.DoesNotExist:
+            # Throw an error if the post is not found
+            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Update the post using the serializer
+        serializer = PostSerializer(post, data=request.data, partial=True)
+
+        try:
+            # Check if the serializer is valid, raise exception if the request data contains invalid field
+            if serializer.is_valid(raise_exception=True):
+                # Save the serializer data to the db
+                serializer.save()
+                # Return an ok response
+                return Response(f"Post has been updated successfully, {serializer.data}", status=status.HTTP_200_OK )
+            else:
+                # Return a bad request if there are other errors
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            # Return a response to the ValidationError that was raised
+            return Response(e.messages, status=status.HTTP_400_BAD_REQUEST)
+
 
     def delete(self, request, pk):
-        pass
+        try:
+            # Get specified post based on primary key
+            post = Post.objects.get(pk=pk)
+            # Delete the post from the db
+            post.delete()
+            # Return an ok response
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Post.DoesNotExist:
+            # Throw an error if the post with the specified id is not found
+            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
 
 # Comment List View for a specific post
 class CommentListView(APIView):
