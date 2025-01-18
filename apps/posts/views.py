@@ -8,10 +8,25 @@ from .serializers import PostSerializer, CommentSerializer
 # Post List View (GET all posts)
 class PostListView(APIView):
     def get(self, request):
-        pass
+        # Get all posts
+        posts = Post.objects.all()
+        # Convert QuerySet to JSON
+        serializer = PostSerializer(posts, many=True)
+        # Return JSON data
+        return Response(serializer.data)
 
     def post(self, request):
-        pass
+        # Take the data from the request and convert it to JSON
+        serializer = PostSerializer(data=request.data)
+        # Check if the data is valid
+        if serializer.is_valid():
+            # Save the data to the database
+            serializer.save()
+            # Return the JSON data
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        # If the data is not valid, return an error
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 # Post Detail View (GET, PUT, DELETE a single post)
 class PostDetailView(APIView):
     def get(self, request, pk):
