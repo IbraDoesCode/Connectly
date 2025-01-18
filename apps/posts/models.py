@@ -11,7 +11,7 @@ class BaseModel(models.Model):
 
 class Post(BaseModel):
     liked_by = models.ManyToManyField(User, related_name='liked_posts')
-    content = models.TextField()
+    content = models.TextField(blank=False)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
