@@ -47,20 +47,100 @@ class CommentListView(APIView):
     serializer_class = CommentSerializer
 
     def get(self, request, post_id):
-        pass
+        try:
+            # Check if the post exists
+            post = Post.objects.get(pk=post_id)
+        except Post.DoesNotExist:
+            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get all comments for the post
+        comments = Comment.objects.filter(post_id=post_id)
+        
+        # Check if there are any comments
+        if not comments.exists():
+            return Response({'Message': 'No comments found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Convert QuerySet to JSON
+        serializer = CommentSerializer(comments, many=True)
+        
+        # Return JSON data
+        return Response(serializer.data)
 
     def post(self, request, post_id):
-        pass
+        try:
+            # Check if the post exists
+            post = Post.objects.get(pk=post_id)
+        except Post.DoesNotExist:
+            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Take the data from the request and convert it to JSON
+        serializer = CommentSerializer(data=request.data)
+        
+        # Check if the data is valid
+        if serializer.is_valid():
+            # Save the data to the database
+            serializer.save(post=post)
+            # Return the JSON data
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        # If the data is not valid, return an error
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # Comment Detail View (GET, PUT, DELETE a specific comment)
 class CommentDetailView(APIView):
     serializer_class = CommentSerializer
 
     def get(self, request, post_id, comment_id):
-        pass
+        try:
+            # Check if the post exists
+            post = Post.objects.get(pk=post_id)
+        except Post.DoesNotExist:
+            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            # Get the specific comment for the post
+            comment = Comment.objects.get(pk=comment_id, post=post)
+        except Comment.DoesNotExist:
+            return Response({'Message': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Serialize and return the comment
+        serializer = CommentSerializer(comment)
+        return Response(serializer.data)
 
     def put(self, request, post_id, comment_id):
-        pass
+        try:
+            # Check if the post exists
+            post = Post.objects.get(pk=post_id)
+        except Post.DoesNotExist:
+            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            # Get the specific comment for the post
+            comment = Comment.objects.get(pk=comment_id, post=post)
+        except Comment.DoesNotExist:
+            return Response({'Message': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Deserialize and update the comment
+        serializer = CommentSerializer(comment, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # If data is invalid, return errors
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, post_id, comment_id):
-        pass
+        try:
+            # Check if the post exists
+            post = Post.objects.get(pk=post_id)
+        except Post.DoesNotExist:
+            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            # Get the specific comment for the post
+            comment = Comment.objects.get(pk=comment_id, post=post)
+        except Comment.DoesNotExist:
+            return Response({'Message': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Delete the comment
+        comment.delete()
+        return Response({'Message': 'Comment deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
