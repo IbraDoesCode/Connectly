@@ -1,6 +1,6 @@
+from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from .models import Post, Comment
-from ..users.models import User
 
 class CommentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -13,3 +13,23 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         fields = ['id', 'content', 'author', 'created_at', 'comments']
+
+    # Override the serialization method to change the author field from a primary key to a username string
+    def to_representation(self, instance):
+        response = super().to_representation(instance)
+        response['author'] = instance.author.username #UserSerializer(instance.author).data
+        return response
+
+    # Override the update method to add validation for allowable fields
+    def update(self, instance, validated_data):
+        allowed_fields = ['content']
+        for field in validated_data.keys():
+            if field not in allowed_fields:
+                raise ValidationError(f"Field {field} is not allowed")
+
+        for field, value in validated_data.items():
+            if field in allowed_fields:
+                setattr(instance, field, value)
+
+        instance.save()
+        return instance
