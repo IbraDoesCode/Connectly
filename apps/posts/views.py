@@ -7,6 +7,8 @@ from .serializers import PostSerializer, CommentSerializer
 
 # Post List View (GET all posts)
 class PostListView(APIView):
+    serializer_class = PostSerializer
+
     def get(self, request):
         # Get all posts
         posts = Post.objects.all()
@@ -29,6 +31,8 @@ class PostListView(APIView):
     
 # Post Detail View (GET, PUT, DELETE a single post)
 class PostDetailView(APIView):
+    serializer_class = PostSerializer
+
     def get(self, request, pk):
         pass
 
@@ -40,6 +44,8 @@ class PostDetailView(APIView):
 
 # Comment List View for a specific post
 class CommentListView(APIView):
+    serializer_class = CommentSerializer
+
     def get(self, request, post_id):
         pass
 
@@ -48,6 +54,8 @@ class CommentListView(APIView):
 
 # Comment Detail View (GET, PUT, DELETE a specific comment)
 class CommentDetailView(APIView):
+    serializer_class = CommentSerializer
+
     def get(self, request, post_id, comment_id):
         pass
 
