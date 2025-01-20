@@ -7,7 +7,24 @@ class CommentSerializer(serializers.ModelSerializer):
         model = Comment
         fields = ['id', 'text', 'author', 'post', 'created_at']
         extra_kwargs = {'post': {'read_only': True}}
-
+        
+    def to_representation(self, instance):
+        response = super().to_representation(instance)
+        response['author'] = instance.author.username if instance.author else None
+        return response
+        
+    def update(self, instance, validated_data):
+        # Validate that the post is the same as the original
+        if instance.post != validated_data.get('post', instance.post):
+            raise serializers.ValidationError("You cannot change the post of a comment.")
+        
+        # Validate that the author is the same as the original
+        if instance.author != validated_data.get('author', instance.author):
+            raise serializers.ValidationError("You cannot change the author of a comment.")
+        
+        # Proceed with the update
+        return super().update(instance, validated_data)
+    
 class PostSerializer(serializers.ModelSerializer):
     comments = CommentSerializer(many=True, read_only=True)
 
@@ -34,3 +51,4 @@ class PostSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
