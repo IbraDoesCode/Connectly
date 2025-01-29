@@ -1,10 +1,30 @@
 # Create your views here.
 from django.core.exceptions import ValidationError
+from django.contrib.auth import authenticate
+# from django.contrib.auth.models import Group, User
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
 from .models import Post, Comment
 from .serializers import PostSerializer, CommentSerializer
+from .permissions import IsAuthor
+
+
+# user = User.objects.create_user(username="newuser", password="secure_pass123")
+
+user = authenticate(username="newuser", password="secure_pass123")
+
+if user is not None:
+    print("Authentication successful!")
+else:
+    print("Invalid credentials.")
+    
+
+# admin_group = Group.objects.get(id="1")
+# user.groups.add(admin_group)
+
 
 # Post List View (GET all posts)
 class PostListView(APIView):
@@ -33,14 +53,18 @@ class PostListView(APIView):
 # Post Detail View (GET, PUT, DELETE a single post)
 class PostDetailView(APIView):
     serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated, IsAuthor]
 
     def get(self, request, pk):
         try:
             # Get specific post based on primary key
             post = Post.objects.get(pk=pk)
+            # Check authentication and permissions
+            self.check_object_permissions(request, post)
             # Serialize the post object
             serializer = PostSerializer(post)
             # Return the serialized JSON to http response
+                        # Return the serialized JSON to http response
             return Response(serializer.data)
         except Post.DoesNotExist:
             # Throw an error if the post with the specified id is not found
@@ -60,6 +84,8 @@ class PostDetailView(APIView):
         try:
             # Check if the serializer is valid, raise exception if the request data contains invalid field
             if serializer.is_valid(raise_exception=True):
+                # Check authentication and permissions
+                self.check_object_permissions(request, post)
                 # Save the serializer data to the db
                 serializer.save()
                 # Return an ok response
@@ -76,6 +102,8 @@ class PostDetailView(APIView):
         try:
             # Get specified post based on primary key
             post = Post.objects.get(pk=pk)
+            # Check authentication and permissions
+            self.check_object_permissions(request, post)
             # Delete the post from the db
             post.delete()
             # Return an ok response
@@ -130,6 +158,7 @@ class CommentListView(APIView):
 # Comment Detail View (GET, PUT, DELETE a specific comment)
 class CommentDetailView(APIView):
     serializer_class = CommentSerializer
+    permission_classes = [IsAuthenticated, IsAuthor]
 
     def get(self, request, post_id, comment_id):
         try:
@@ -160,9 +189,13 @@ class CommentDetailView(APIView):
             comment = Comment.objects.get(pk=comment_id, post=post)
         except Comment.DoesNotExist:
             return Response({'Message': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check authentication and permissions
+        self.check_object_permissions(request, comment)
 
         # Deserialize and update the comment
         serializer = CommentSerializer(comment, data=request.data)
+        
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -182,6 +215,9 @@ class CommentDetailView(APIView):
             comment = Comment.objects.get(pk=comment_id, post=post)
         except Comment.DoesNotExist:
             return Response({'Message': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check authentication and permissions
+        self.check_object_permissions(request, comment)
 
         # Delete the comment
         comment.delete()
