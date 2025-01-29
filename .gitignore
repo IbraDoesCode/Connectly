@@ -3,5 +3,5 @@ db.sqlite3
 __pycache__/
 *.pyc
 .idea
-cert.*
+cert.pem
 key.pem

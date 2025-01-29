@@ -1,29 +1,12 @@
 # Create your views here.
 from django.core.exceptions import ValidationError
-from django.contrib.auth import authenticate
-# from django.contrib.auth.models import Group, User
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from .models import Post, Comment
 from .serializers import PostSerializer, CommentSerializer
 from .permissions import IsAuthor
-
-
-# user = User.objects.create_user(username="newuser", password="secure_pass123")
-
-user = authenticate(username="newuser", password="secure_pass123")
-
-if user is not None:
-    print("Authentication successful!")
-else:
-    print("Invalid credentials.")
-    
-
-# admin_group = Group.objects.get(id="1")
-# user.groups.add(admin_group)
 
 
 # Post List View (GET all posts)
