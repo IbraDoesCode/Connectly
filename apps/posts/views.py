@@ -98,6 +98,7 @@ class PostDetailView(APIView):
 # Comment List View for a specific post
 class CommentListView(APIView):
     serializer_class = CommentSerializer
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, post_id):
         try:
@@ -132,7 +133,7 @@ class CommentListView(APIView):
         # Check if the data is valid
         if serializer.is_valid():
             # Save the data to the database
-            serializer.save(post=post)
+            serializer.save(post=post, author=request.user)
             # Return the JSON data
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         # If the data is not valid, return an error
