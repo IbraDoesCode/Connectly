@@ -1,5 +1,5 @@
 from django.db import models
-from ..users.models import User
+from django.contrib.auth.models import User # Reference djano's built-in User model
 
 # Create your models here.
 class BaseModel(models.Model):
@@ -20,7 +20,7 @@ class Post(BaseModel):
 class Comment(BaseModel):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
-    text = models.TextField()
+    text = models.TextField(blank=False)
 
     def __str__(self):
         return f"Comment by {self.author.username} on Post ID {self.post.id}"
