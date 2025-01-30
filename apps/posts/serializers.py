@@ -6,7 +6,7 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = ['id', 'text', 'author', 'post', 'created_at']
-        extra_kwargs = {'post': {'read_only': True}}
+        extra_kwargs = {'post': {'read_only': True}, 'author': {'read_only': True}}
         
     def to_representation(self, instance):
         response = super().to_representation(instance)
