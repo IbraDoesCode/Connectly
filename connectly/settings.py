@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -40,6 +41,7 @@ INSTALLED_APPS = [
     'django_extensions',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'apps.posts',
     'apps.users'
 ]
@@ -82,6 +84,18 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ]
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5), # Set the expiration time for access tokens
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7), # Set the expiration time for refresh tokens
+    'ROTATE_REFRESH_TOKENS': True, # Enables rotation of refresh tokens
+    'BLACKLIST_AFTER_ROTATION': True,  # Enables blacklisting of refresh tokens
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_BLACKLIST_ENABLED": True,  # Enable token blacklisting
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 WSGI_APPLICATION = 'connectly.wsgi.application'
