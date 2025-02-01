@@ -3,7 +3,9 @@ db.sqlite3
 __pycache__/
 *.pyc
 .idea
-cert.pem
+
+# Ignore all certs and keys from OpenSSL
+private.key
 key.pem
-cert.crt
-cert.key
+cert.*
+develop
