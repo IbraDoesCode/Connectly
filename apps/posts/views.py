@@ -11,6 +11,7 @@ from .permissions import IsAuthor
 
 # Post List View (GET all posts)
 class PostListView(APIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = PostSerializer
 
     def get(self, request):
