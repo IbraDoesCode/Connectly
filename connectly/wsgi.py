@@ -11,6 +11,11 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
+from utils.logger import Logger
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'connectly.settings')
+
+logger = Logger().get_logger()
+logger.info("API Initialized Successfully")
 
 application = get_wsgi_application()
