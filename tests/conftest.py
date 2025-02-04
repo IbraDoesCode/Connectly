@@ -39,6 +39,15 @@ def register_url():
 def get_all_users_url():
     return reverse('user_list')
 
+@pytest.fixture
+def token_login_url():
+    return reverse('token_obtain_pair')
+
+@pytest.fixture
+def change_role_url():
+    def _generate_url(user_id):
+        return reverse('user-role-change', kwargs={'user_id': user_id})
+    return _generate_url
 
 # Mock Data Fixtures
 @pytest.fixture

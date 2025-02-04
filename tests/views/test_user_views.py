@@ -38,12 +38,14 @@ def test_user_registration_missing_field(api_client, register_url):
     assert 'username' in response.data
     assert User.objects.count() == 0
 
+
 @pytest.mark.django_db
 def test_create_admin_user(api_client, initialize_groups, mock_data):
     profile = UserFactory.create_admin_user(**mock_data)
 
     assert profile is not None
     assert profile.user.groups.filter(name='Admin').exists()
+
 
 @pytest.mark.django_db
 def test_get_users(auth_client, get_all_users_url, mock_data):
@@ -53,16 +55,18 @@ def test_get_users(auth_client, get_all_users_url, mock_data):
     assert response.status_code == status.HTTP_200_OK
 
     response_data = response.json()
-    print(response_data)
+
     assert len(response_data) == 2
     assert any(user['username'] == 'admin' for user in response_data)
     assert any(user['username'] == user1.user.username for user in response_data)
+
 
 @pytest.mark.django_db
 def test_get_users_logged_out(api_client, get_all_users_url, mock_data):
 
     response = api_client.get(get_all_users_url, secure=True)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
 
 @pytest.mark.django_db
 def test_get_users_unauthorized(api_client, register_url, get_all_users_url, mock_data):
@@ -73,3 +77,55 @@ def test_get_users_unauthorized(api_client, register_url, get_all_users_url, moc
 
     response = api_client.get(get_all_users_url, secure=True)
     assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+def test_login_user(api_client, initialize_groups, token_login_url, get_all_users_url, mock_admin_data):
+    admin = UserFactory.create_admin_user(**mock_admin_data)
+
+    login = api_client.post(
+        token_login_url,
+        {
+            'username': admin.user.username,
+            'password': mock_admin_data['password'],
+        },
+        secure=True, format='json'
+    )
+    token = login.data['access']
+
+    assert login.status_code == status.HTTP_200_OK
+    assert token is not None
+
+@pytest.mark.django_db
+def test_change_user_role(api_client, auth_client, get_all_users_url, change_role_url, mock_data, register_url):
+    admin_creds = auth_client._credentials
+    # Register new user
+    register = api_client.post(register_url, mock_data, secure=True, format='json')
+    user = User.objects.get(username=mock_data['username'])
+    token = register.data['access']
+    api_client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
+    user_creds = api_client._credentials
+
+    # Try to access Get Users endpoint
+    response1 = api_client.get(get_all_users_url, secure=True)
+    assert response1.status_code == status.HTTP_403_FORBIDDEN
+
+    # Add to admin role
+    auth_client.credentials(**admin_creds)
+    role_response = auth_client.post(change_role_url(user.id), { "role": "Admin" }, secure=True, format='json')
+    assert role_response.status_code == status.HTTP_200_OK
+
+    # Access Get Users again
+    api_client.credentials(**user_creds)
+    response2 = api_client.get(get_all_users_url, secure=True)
+    assert response2.status_code == status.HTTP_200_OK
+
+    # Change to moderator role
+    auth_client.credentials(**admin_creds)
+    role_response = auth_client.post(change_role_url(user.id), { "role": "Moderator" }, secure=True, format='json')
+    assert role_response.status_code == status.HTTP_200_OK
+
+    # Access Get Users again
+    api_client.credentials(**user_creds)
+    response2 = api_client.get(get_all_users_url, secure=True)
+    assert response1.status_code == status.HTTP_403_FORBIDDEN

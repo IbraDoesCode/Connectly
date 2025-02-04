@@ -1,3 +1,4 @@
+from django.contrib.auth.models import Group
 from rest_framework import serializers
 from .factories import UserFactory
 from .models import Profile
@@ -18,7 +19,6 @@ class UserSerializer(serializers.ModelSerializer):
         return f"{obj.first_name} {obj.last_name}"
 
     def create(self, validated_data):
-        print(validated_data)
         user_data = validated_data.pop('user')
         password = validated_data.pop('password')
 
@@ -40,3 +40,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RoleSerializer(serializers.ModelSerializer):
     role = serializers.ChoiceField(choices=['Admin', 'Moderator'])
+
+    class Meta:
+        model = Group
+        fields = ['role']
