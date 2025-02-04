@@ -77,6 +77,7 @@ class UserRoleView(APIView):
 
             return ResponseFactory.success(
                 f"User {user.username} has been added to the {role} group",
+                {"detail": "Role has been updated."}
             )
 
         except User.DoesNotExist:
