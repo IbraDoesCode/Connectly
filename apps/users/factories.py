@@ -7,6 +7,9 @@ class UserFactory:
 
     @staticmethod
     def create_user_and_profile(username, email, password, first_name, last_name, bio=""):
+        if username is None or email is None or password is None or first_name is None or last_name is None:
+            raise ValueError("Username, email, password and first_name and last_name are required")
+
         user = User.objects.create_user(
             username=username,
             email=email,

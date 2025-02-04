@@ -16,6 +16,11 @@ class ResponseFactory:
         return Response(data, status=status.HTTP_201_CREATED)
 
     @staticmethod
+    def deleted(message, data=None):
+        ResponseFactory.logger.info(message)
+        return Response(data, status=status.HTTP_204_NO_CONTENT)
+
+    @staticmethod
     def bad_request(message, data=None):
         ResponseFactory.logger.error(message)
         return Response(data, status=status.HTTP_400_BAD_REQUEST)
