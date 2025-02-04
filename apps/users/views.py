@@ -6,6 +6,7 @@ from django.contrib.auth.models import User, Group
 
 from utils.logger import Logger
 from utils.response_factory import ResponseFactory
+from .factories import UserFactory
 from .models import Profile
 from .permissions import IsAdmin
 from .serializers import UserSerializer, RoleSerializer
@@ -61,7 +62,6 @@ class UserRoleView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
     def post(self, request, user_id):
-
         serializer = RoleSerializer(data=request.data)
 
         if not serializer.is_valid():
@@ -73,10 +73,7 @@ class UserRoleView(APIView):
 
         try:
             user = User.objects.get(id=user_id)
-            user.groups.clear()
-
-            group = Group.objects.get(name=role)
-            user.groups.add(group)
+            UserFactory.assign_user_role(user, role)
 
             return ResponseFactory.success(
                 f"User {user.username} has been added to the {role} group",
@@ -87,6 +84,3 @@ class UserRoleView(APIView):
                 "User not found",
                 {"detail": "User not found."}
             )
-
-    def patch(self, request):
-        role = request.data.get('role')
