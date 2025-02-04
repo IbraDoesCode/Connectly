@@ -8,9 +8,9 @@ from apps.users.models import Profile
 
 # Test Cases
 @pytest.mark.django_db
-def test_user_registration(api_client, mock_data, register_url):
+def test_user_registration(api_client, mock_user_data, register_url):
 
-    response = api_client.post(register_url, mock_data, secure=True, format='json')
+    response = api_client.post(register_url, mock_user_data, secure=True, format='json')
 
     assert response.status_code == status.HTTP_201_CREATED
     assert 'access' in response.data
@@ -40,18 +40,18 @@ def test_user_registration_missing_field(api_client, register_url):
 
 
 @pytest.mark.django_db
-def test_create_admin_user(api_client, initialize_groups, mock_data):
-    profile = UserFactory.create_admin_user(**mock_data)
+def test_create_admin_user(api_client, initialize_groups, mock_user_data):
+    profile = UserFactory.create_admin_user(**mock_user_data)
 
     assert profile is not None
     assert profile.user.groups.filter(name='Admin').exists()
 
 
 @pytest.mark.django_db
-def test_get_users(auth_client, get_all_users_url, mock_data):
-    user1 = UserFactory.create_user_and_profile(**mock_data)
+def test_get_users(admin_auth_client, get_all_users_url, mock_user_data):
+    user1 = UserFactory.create_user_and_profile(**mock_user_data)
 
-    response = auth_client.get(get_all_users_url, secure=True)
+    response = admin_auth_client.get(get_all_users_url, secure=True)
     assert response.status_code == status.HTTP_200_OK
 
     response_data = response.json()
@@ -62,15 +62,15 @@ def test_get_users(auth_client, get_all_users_url, mock_data):
 
 
 @pytest.mark.django_db
-def test_get_users_logged_out(api_client, get_all_users_url, mock_data):
+def test_get_users_logged_out(api_client, get_all_users_url, mock_user_data):
 
     response = api_client.get(get_all_users_url, secure=True)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.django_db
-def test_get_users_unauthorized(api_client, register_url, get_all_users_url, mock_data):
-    register = api_client.post(register_url, mock_data, secure=True, format='json')
+def test_get_users_unauthorized(api_client, register_url, get_all_users_url, mock_user_data):
+    register = api_client.post(register_url, mock_user_data, secure=True, format='json')
 
     token = register.data['access']
     api_client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
@@ -97,11 +97,11 @@ def test_login_user(api_client, initialize_groups, token_login_url, get_all_user
     assert token is not None
 
 @pytest.mark.django_db
-def test_change_user_role(api_client, auth_client, get_all_users_url, change_role_url, mock_data, register_url):
-    admin_creds = auth_client._credentials
+def test_change_user_role(api_client, admin_auth_client, get_all_users_url, change_role_url, mock_user_data, register_url):
+    admin_creds = admin_auth_client._credentials
     # Register new user
-    register = api_client.post(register_url, mock_data, secure=True, format='json')
-    user = User.objects.get(username=mock_data['username'])
+    register = api_client.post(register_url, mock_user_data, secure=True, format='json')
+    user = User.objects.get(username=mock_user_data['username'])
     token = register.data['access']
     api_client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
     user_creds = api_client._credentials
@@ -111,8 +111,8 @@ def test_change_user_role(api_client, auth_client, get_all_users_url, change_rol
     assert response1.status_code == status.HTTP_403_FORBIDDEN
 
     # Add to admin role
-    auth_client.credentials(**admin_creds)
-    role_response = auth_client.post(change_role_url(user.id), { "role": "Admin" }, secure=True, format='json')
+    admin_auth_client.credentials(**admin_creds)
+    role_response = admin_auth_client.post(change_role_url(user.id), { "role": "Admin" }, secure=True, format='json')
     assert role_response.status_code == status.HTTP_200_OK
 
     # Access Get Users again
@@ -121,8 +121,8 @@ def test_change_user_role(api_client, auth_client, get_all_users_url, change_rol
     assert response2.status_code == status.HTTP_200_OK
 
     # Change to moderator role
-    auth_client.credentials(**admin_creds)
-    role_response = auth_client.post(change_role_url(user.id), { "role": "Moderator" }, secure=True, format='json')
+    admin_auth_client.credentials(**admin_creds)
+    role_response = admin_auth_client.post(change_role_url(user.id), { "role": "Moderator" }, secure=True, format='json')
     assert role_response.status_code == status.HTTP_200_OK
 
     # Access Get Users again
