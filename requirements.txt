@@ -7,3 +7,5 @@ Werkzeug
 pyOpenSSL
 bcrypt
 djangorestframework-simplejwt
+pytest
+pytest-django
