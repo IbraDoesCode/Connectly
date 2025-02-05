@@ -1,12 +1,11 @@
 # Create your views here.
-from django.core.exceptions import ValidationError
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+
+from utils.response_factory import ResponseFactory
 from .models import Post, Comment
-from .serializers import PostSerializer, CommentSerializer
 from .permissions import IsAuthor
+from .serializers import PostSerializer, CommentSerializer
 
 
 # Post List View (GET all posts)
@@ -20,81 +19,118 @@ class PostListView(APIView):
         # Convert QuerySet to JSON
         serializer = PostSerializer(posts, many=True)
         # Return JSON data
-        return Response(serializer.data)
+        return ResponseFactory.success(serializer.data,serializer.data)
 
     def post(self, request):
         # Take the data from the request and convert it to JSON
         serializer = PostSerializer(data=request.data)
+
         # Check if the data is valid
-        if serializer.is_valid():
-            # Save the data to the database
-            serializer.save()
-            # Return the JSON data
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        # If the data is not valid, return an error
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+        if not serializer.is_valid():
+            # If the data is not valid, return an error
+            return ResponseFactory.bad_request(
+                f"Error creating post",
+                serializer.errors
+            )
+
+        # Save the data to the database
+        post = serializer.save(author=self.request.user)
+
+        # Return the JSON data
+        return ResponseFactory.created(
+            f"Post {post} created successfully",
+            serializer.data
+        )
+
+
 # Post Detail View (GET, PUT, DELETE a single post)
 class PostDetailView(APIView):
     serializer_class = PostSerializer
-    permission_classes = [IsAuthenticated, IsAuthor]
 
-    def get(self, request, pk):
+    # Overrides the permission to allow GET of a single post even if the user is not the author
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAuthor()]
+
+
+    def get(self, request, post_id):
         try:
-            # Get specific post based on primary key
-            post = Post.objects.get(pk=pk)
-            # Check authentication and permissions
-            self.check_object_permissions(request, post)
+            # Get specific post based on id
+            post = Post.objects.get(id=post_id)
+
             # Serialize the post object
             serializer = PostSerializer(post)
+
             # Return the serialized JSON to http response
-                        # Return the serialized JSON to http response
-            return Response(serializer.data)
+            return ResponseFactory.success(
+                serializer.data,
+                serializer.data
+            )
         except Post.DoesNotExist:
             # Throw an error if the post with the specified id is not found
-            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            return ResponseFactory.not_found(
+                f"Post {post_id} not found",
+                {'Message': 'Post not found'}
+            )
 
-    def patch(self, request, pk):
+    def patch(self, request, post_id):
         try:
             # Get specified post based on primary key
-            post = Post.objects.get(pk=pk)
-        except Post.DoesNotExist:
-            # Throw an error if the post is not found
-            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            post = Post.objects.get(id=post_id)
 
-        # Update the post using the serializer
-        serializer = PostSerializer(post, data=request.data, partial=True)
-
-        try:
-            # Check if the serializer is valid, raise exception if the request data contains invalid field
-            if serializer.is_valid(raise_exception=True):
-                # Check authentication and permissions
-                self.check_object_permissions(request, post)
-                # Save the serializer data to the db
-                serializer.save()
-                # Return an ok response
-                return Response(f"Post has been updated successfully, {serializer.data}", status=status.HTTP_200_OK )
-            else:
-                # Return a bad request if there are other errors
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except ValidationError as e:
-            # Return a response to the ValidationError that was raised
-            return Response(e.messages, status=status.HTTP_400_BAD_REQUEST)
-
-
-    def delete(self, request, pk):
-        try:
-            # Get specified post based on primary key
-            post = Post.objects.get(pk=pk)
             # Check authentication and permissions
             self.check_object_permissions(request, post)
+
+            # Update the post using the serializer
+            serializer = PostSerializer(post, data=request.data, partial=True)
+
+            # Check if the serializer is valid, raise exception if the request data contains invalid field
+            if not serializer.is_valid():
+                # Return a bad request if there are other errors
+                return ResponseFactory.bad_request(
+                    f"Error updating post",
+                    serializer.errors
+                )
+
+            # Save the serializer data to the db
+            serializer.save()
+            print(serializer.data)
+            # Return an ok response
+            return ResponseFactory.success(
+                f"Post updated successfully",
+                serializer.data
+            )
+
+        except Post.DoesNotExist:
+            # Throw an error if the post is not found
+            return ResponseFactory.not_found(
+                "Update Error: Post not found",
+                {'Message': 'Post not found'}
+            )
+
+    def delete(self, request, post_id):
+        try:
+            # Get specified post based on primary key
+            post = Post.objects.get(pk=post_id)
+
+            # Check authentication and permissions
+            self.check_object_permissions(request, post)
+
             # Delete the post from the db
             post.delete()
+
             # Return an ok response
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return ResponseFactory.deleted(
+                f"Post deleted successfully",
+            )
         except Post.DoesNotExist:
             # Throw an error if the post with the specified id is not found
-            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            return ResponseFactory.not_found(
+                "Error deleting post",
+                {'Message': 'Post not found'}
+            )
+
 
 # Comment List View for a specific post
 class CommentListView(APIView):
@@ -106,27 +142,32 @@ class CommentListView(APIView):
             # Check if the post exists
             post = Post.objects.get(pk=post_id)
         except Post.DoesNotExist:
-            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            return ResponseFactory.not_found(
+                "Error: Post not found",
+                {'Message': 'Post not found'}
+            )
         
         # Get all comments for the post
-        comments = Comment.objects.filter(post_id=post_id)
-        
-        # Check if there are any comments
-        if not comments.exists():
-            return Response({'Message': 'No comments found'}, status=status.HTTP_404_NOT_FOUND)
+        comments = post.comments.all()
         
         # Convert QuerySet to JSON
         serializer = CommentSerializer(comments, many=True)
         
         # Return JSON data
-        return Response(serializer.data)
+        return ResponseFactory.success(
+            serializer.data,
+            serializer.data
+        )
 
     def post(self, request, post_id):
         try:
             # Check if the post exists
             post = Post.objects.get(pk=post_id)
         except Post.DoesNotExist:
-            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            return ResponseFactory.not_found(
+                "Create Error: Post not found",
+                {'Message': 'Post not found'}
+            )
         
         # Take the data from the request and convert it to JSON
         serializer = CommentSerializer(data=request.data)
@@ -134,47 +175,75 @@ class CommentListView(APIView):
         # Check if the data is valid
         if serializer.is_valid():
             # Save the data to the database
-            serializer.save(post=post, author=request.user)
+            serializer.save(post=post, author=self.request.user)
+
             # Return the JSON data
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return ResponseFactory.created(
+                "Comment created successfully",
+                serializer.data
+            )
+
         # If the data is not valid, return an error
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return ResponseFactory.bad_request(
+            f"Error creating comment {serializer.errors}",
+            serializer.errors
+        )
 
 # Comment Detail View (GET, PUT, DELETE a specific comment)
 class CommentDetailView(APIView):
     serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticated, IsAuthor]
+
+    # Overrides the permission to allow GET of a single post even if the user is not the author
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAuthor()]
 
     def get(self, request, post_id, comment_id):
         try:
             # Check if the post exists
             post = Post.objects.get(pk=post_id)
         except Post.DoesNotExist:
-            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            return ResponseFactory.not_found(
+                "Post not found",
+                {'Message': 'Post not found'}
+            )
 
         try:
             # Get the specific comment for the post
-            comment = Comment.objects.get(pk=comment_id, post=post)
+            comment = post.comments.get(pk=comment_id)
         except Comment.DoesNotExist:
-            return Response({'Message': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
+            return ResponseFactory.not_found(
+                "Comment not found",
+                {'Message': 'Comment not found'}
+            )
 
         # Serialize and return the comment
         serializer = CommentSerializer(comment)
-        return Response(serializer.data)
+        return ResponseFactory.success(
+            serializer.data,
+            serializer.data
+        )
 
     def put(self, request, post_id, comment_id):
         try:
             # Check if the post exists
             post = Post.objects.get(pk=post_id)
         except Post.DoesNotExist:
-            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            return ResponseFactory.not_found(
+                "Update Error: Post not found",
+                {'Message': 'Post not found'}
+            )
 
         try:
             # Get the specific comment for the post
-            comment = Comment.objects.get(pk=comment_id, post=post)
+            comment = post.comments.get(pk=comment_id)
         except Comment.DoesNotExist:
-            return Response({'Message': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
-        
+            return ResponseFactory.not_found(
+                "Update Error: Comment not found",
+                {'Message': 'Comment not found'}
+            )
+
         # Check authentication and permissions
         self.check_object_permissions(request, comment)
 
@@ -183,27 +252,43 @@ class CommentDetailView(APIView):
         
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
+
+            return ResponseFactory.success(
+                "Comment updated successfully",
+                serializer.data
+            )
 
         # If data is invalid, return errors
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return ResponseFactory.bad_request(
+            "Error updating comment",
+            serializer.errors
+        )
 
     def delete(self, request, post_id, comment_id):
         try:
             # Check if the post exists
             post = Post.objects.get(pk=post_id)
         except Post.DoesNotExist:
-            return Response({'Message': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            return ResponseFactory.not_found(
+                "Delete Error: Post not found",
+                {'Message': 'Post not found'}
+            )
 
         try:
             # Get the specific comment for the post
-            comment = Comment.objects.get(pk=comment_id, post=post)
+            comment = post.comments.get(pk=comment_id)
         except Comment.DoesNotExist:
-            return Response({'Message': 'Comment not found'}, status=status.HTTP_404_NOT_FOUND)
+            return ResponseFactory.not_found(
+                "Delete Error: Comment does not exist",
+                {'Message': 'Comment not found'}
+            )
         
         # Check authentication and permissions
         self.check_object_permissions(request, comment)
 
         # Delete the comment
         comment.delete()
-        return Response({'Message': 'Comment deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        return ResponseFactory.deleted(
+            "Comment deleted successfully",
+            {'Message': 'Comment deleted successfully'}
+        )
