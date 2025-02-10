@@ -86,6 +86,16 @@ def test_delete_comment(comment_detail_url, populate_comments, auth_login_client
     assert not Comment.objects.filter(id=comm4.id).exists()
 
 
+@pytest.mark.django_db
+def test_cascade_delete_post_comment(post_detail_url, populate_comments, auth_login_client):
+    comm1, comm2, comm3, comm4 = populate_comments
+
+    login = auth_login_client(comm4.post.author.username, '1234')
+    response = login.delete(post_detail_url(comm4.post.id), secure=True, format='json')
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert not Comment.objects.filter(id=comm4.id).exists()
+
 
 @pytest.mark.django_db
 def test_delete_comment_not_author(comment_detail_url, populate_comments, auth_login_client):
