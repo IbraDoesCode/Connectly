@@ -312,8 +312,7 @@ class LikePostView(APIView):
         #if liked, return message post already liked
         else:
             return ResponseFactory.conflict('Post already liked',
-                                             {'message': 'Post already liked',
-                                            'like_count': post.liked_by.count()})
+                                             {'message': 'Post already liked'})
 
         # Return Success response with updated like count
         like_count = post.liked_by.count()   
