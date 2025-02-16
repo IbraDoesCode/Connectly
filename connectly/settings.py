@@ -54,6 +54,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'connectly.middleware.rate_limit_middleware.RateLimitMiddleware'
 ]
 
 ROOT_URLCONF = 'connectly.urls'

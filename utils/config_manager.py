@@ -14,6 +14,9 @@ class ConfigManager:
             "DEFAULT_PAGE_SIZE": 10,
             "ENABLE_ANALYTICS": True,
             "RATE_LIMIT": 100,
+            "RATE_LIMIT_MAX_REQUESTS": 1,
+            "RATE_LIMIT_TIME_WINDOW": 1,
+            "RATE_LIMIT_CLEANUP_INTERVAL": 10,
         }
 
     def get_settings(self, key):
