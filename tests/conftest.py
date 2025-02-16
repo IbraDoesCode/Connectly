@@ -101,6 +101,12 @@ def comment_detail_url():
     return _generate_url
 
 
+@pytest.fixture
+def like_post_url():
+    def _generate_url(post_id):
+        return reverse('like_post', kwargs={'post_id': post_id})
+    return _generate_url
+
 # Mock Data Fixtures
 @pytest.fixture
 def mock_user_data():
