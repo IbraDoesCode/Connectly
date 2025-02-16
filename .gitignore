@@ -9,3 +9,8 @@ private.key
 key.pem
 cert.*
 develop
+
+
+# Ignore all migrations files
+apps/users/migrations
+apps/posts/migrations
