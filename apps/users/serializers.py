@@ -1,12 +1,14 @@
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, User
 from rest_framework import serializers
+from rest_framework.serializers import ValidationError
+
 from .factories import UserFactory
 from .models import Profile
 
 
 class UserSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
-    email = serializers.CharField(source='user.email')
+    email = serializers.EmailField(source='user.email')
     password = serializers.CharField(write_only=True)
     full_name = serializers.SerializerMethodField(read_only=True)
 
@@ -17,6 +19,16 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}"
+
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise ValidationError("This username is already taken.")
+        return value
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise ValidationError("This email is already in use.")
+        return value
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
