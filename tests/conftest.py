@@ -7,12 +7,37 @@ from apps.posts.factories import PostFactory, CommentFactory
 from apps.users.factories import UserFactory
 from django.contrib.auth.models import Group
 
+from utils.config_manager import ConfigManager
+from utils.rate_limiter import RateLimiterFactory
+
 # Initializer Fixtures
 @pytest.fixture
 def initialize_groups():
     Group.objects.get_or_create(name='Admin')
     Group.objects.get_or_create(name='Moderator')
 
+# Middleware Fixtures
+@pytest.fixture(autouse=True)
+def disable_rate_limiting(monkeypatch, request):
+    # Disable rate limiting for all tests except test_rate_limiter.py
+    if "test_rate_limiter.py" not in str(request.fspath):
+        def mock_check_rate_limit(*args, **kwargs):
+            return True
+            
+        monkeypatch.setattr('utils.rate_limiter.InMemoryRateLimiter.check_rate_limit', 
+                            mock_check_rate_limit)
+        
+@pytest.fixture(scope="session")
+def middleware_config():
+    config = ConfigManager()
+    config.set_settings("RATE_LIMIT_MAX_REQUESTS", 2)
+    config.set_settings("RATE_LIMIT_TIME_WINDOW", 1)
+    config.set_settings("RATE_LIMIT_CLEANUP_INTERVAL", 10)
+    return config
+    
+@pytest.fixture
+def rate_limiter(middleware_config):
+    return RateLimiterFactory.create_rate_limiter("memory")
 
 # Client Fixtures
 @pytest.fixture
