@@ -37,6 +37,11 @@ class ResponseFactory:
     def not_found(message, data=None):
         ResponseFactory.logger.error(message)
         return Response(data, status=status.HTTP_404_NOT_FOUND)
+    
+    @staticmethod
+    def conflict(message, data=None):
+        ResponseFactory.logger.info(message)
+        return Response(data, status=status.HTTP_409_CONFLICT)
 
     @staticmethod
     def internal_server_error(message, data=None):
