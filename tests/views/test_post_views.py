@@ -1,6 +1,6 @@
 import pytest
 from rest_framework import status
-
+from django.contrib.auth.models import User
 from apps.posts.models import Post
 
 
@@ -93,3 +93,37 @@ def test_delete_post_not_author(post_detail_url, populate_posts, auth_login_clie
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert Post.objects.filter(id=post1.id).exists()
+
+@pytest.mark.django_db
+def test_like_post(auth_client, like_post_url, populate_posts):
+    post1, _, _, _, = populate_posts
+    client = auth_client
+
+    like_url = like_post_url(post1.id)
+
+    response  = client.post(like_url, secure=True, format='json')
+    user_id = User.objects.get(username='test_user').id
+
+    assert response.status_code == status.HTTP_200_OK
+    assert post1.liked_by.filter(id=user_id).exists()
+
+    response_duplicate =  client.post(like_url, secure=True, format='json')
+    assert response_duplicate.status_code == status.HTTP_409_CONFLICT
+
+@pytest.mark.django_db
+def test_unlike_post(auth_client, like_post_url, populate_posts):
+    post1, _, _, _, = populate_posts
+    client = auth_client
+
+    like_url = like_post_url(post1.id)
+    user_id = User.objects.get(username='test_user').id
+
+    response_like = client.post(like_url, secure=True, format='json')
+    assert response_like.status_code == status.HTTP_200_OK
+    assert post1.liked_by.filter(id=user_id).exists()
+
+    response_unlike = client.delete(like_url, secure=True, format='json')
+    assert response_unlike.status_code == status.HTTP_204_NO_CONTENT
+    
+    response_unlike_again = client.delete(like_url, secure=True, format='json')
+    assert response_unlike_again.status_code == status.HTTP_409_CONFLICT
