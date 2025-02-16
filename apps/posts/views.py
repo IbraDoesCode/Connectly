@@ -292,3 +292,54 @@ class CommentDetailView(APIView):
             "Comment deleted successfully",
             {'Message': 'Comment deleted successfully'}
         )
+
+class LikePostView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        # Find post by post_id
+        try:
+            post = Post.objects.get(pk=post_id)
+        except Post.DoesNotExist:
+            return ResponseFactory.not_found('Post not found', 
+                                             {'message': 'Post not found'})
+
+        # Check if the user already liked the post
+        user = request.user
+        #if not liked, add user to liked_by
+        if not post.liked_by.filter(id=user.id).exists():
+            post.liked_by.add(user)
+        #if liked, return message post already liked
+        else:
+            return ResponseFactory.conflict('Post already liked',
+                                             {'message': 'Post already liked'})
+
+        # Return Success response with updated like count
+        like_count = post.liked_by.count()   
+        return ResponseFactory.success('Post successfully liked',
+                                        {'message': 'Post successfully liked',
+                                        'like_count': like_count})
+
+    def delete(self, request, post_id):
+        # Find post by post_id
+        try:
+            post = Post.objects.get(pk=post_id)
+        except Post.DoesNotExist:
+            return ResponseFactory.not_found('Post not found', 
+                                             {'message': 'Post not found'})
+
+        # Check if the user already liked the post
+        user = request.user
+        # if  liked, remove user from liked_by
+        if post.liked_by.filter(id=user.id).exists():
+            post.liked_by.remove(user)
+        # if not liked, return message post not liked
+        else:
+            return ResponseFactory.conflict('Post not liked',
+                                             {'message': 'Post not liked'})
+
+        # Return success response with updated like count
+        like_count = post.liked_by.count()
+        return ResponseFactory.deleted('Post unliked', 
+                                       {'message': 'Post unliked',
+                                        'like_count': like_count})
