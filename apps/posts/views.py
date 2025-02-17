@@ -1,25 +1,30 @@
 # Create your views here.
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
 
 from utils.response_factory import ResponseFactory
 from .models import Post, Comment
 from .permissions import IsAuthor
 from .serializers import PostSerializer, CommentSerializer
+from rest_framework.generics import ListAPIView
 
 
 # Post List View (GET all posts)
-class PostListView(APIView):
+class PostListView(ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PostSerializer
 
-    def get(self, request):
-        # Get all posts
-        posts = Post.objects.all()
-        # Convert QuerySet to JSON
+    def get(self, request, *args, **kwargs):
+        # Get the queryset and paginate it manually
+        posts = self.paginate_queryset(Post.objects.all()) # Apply pagination
+        
+        # Serialize the paginated queryset
         serializer = PostSerializer(posts, many=True)
-        # Return JSON data
-        return ResponseFactory.success(serializer.data,serializer.data)
+        
+        # Return the paginated response (with pagination metadata like 'next', 'previous')
+        return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
+
 
     def post(self, request):
         # Take the data from the request and convert it to JSON
@@ -133,7 +138,7 @@ class PostDetailView(APIView):
 
 
 # Comment List View for a specific post
-class CommentListView(APIView):
+class CommentListView(ListAPIView):
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
 
@@ -148,16 +153,13 @@ class CommentListView(APIView):
             )
         
         # Get all comments for the post
-        comments = post.comments.all()
+        comments = self.paginate_queryset(post.comments.all()) # Apply pagination
         
         # Convert QuerySet to JSON
         serializer = CommentSerializer(comments, many=True)
         
         # Return JSON data
-        return ResponseFactory.success(
-            serializer.data,
-            serializer.data
-        )
+        return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
 
     def post(self, request, post_id):
         try:
