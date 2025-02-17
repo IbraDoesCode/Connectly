@@ -58,3 +58,16 @@ class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = ['role']
+        
+        
+class ProfileSearchSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    full_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = ['id', 'username', 'full_name']
+        read_only_fields = ['id', 'username', 'full_name']
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}"
