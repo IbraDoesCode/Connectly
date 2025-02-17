@@ -21,6 +21,10 @@ class UserFactory:
         # Check if the username already exists before trying to create the user
         if User.objects.filter(username=username).exists():
             raise ValidationError({"username": "This username is already taken."})
+        
+        # Check if the email already exists before trying to create the user
+        if User.objects.filter(email=email).exists():
+            raise ValidationError({"email": "This email is already in use."})
 
         user = User.objects.create_user(
             username=username,

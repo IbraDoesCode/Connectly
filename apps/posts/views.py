@@ -294,6 +294,7 @@ class CommentDetailView(APIView):
         )
 
 class LikePostView(APIView):
+    
     permission_classes = [IsAuthenticated]
 
     def post(self, request, post_id):
@@ -343,3 +344,50 @@ class LikePostView(APIView):
         return ResponseFactory.deleted('Post unliked', 
                                        {'message': 'Post unliked',
                                         'like_count': like_count})
+class LikeCommentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id, comment_id):
+        try:
+            comment = Comment.objects.get(pk=comment_id)
+        except Comment.DoesNotExist:
+            return ResponseFactory.not_found('Comment not found', 
+                                             {'message': 'Comment not found'})
+
+        if comment is None:
+            return ResponseFactory.not_found('Comment not found', 
+                                             {'message': 'Comment not found'})
+
+        user = request.user
+        if comment.liked_by.filter(id=user.id).exists():
+            return ResponseFactory.conflict('Comment already liked', 
+                                            {'message': 'Comment already liked'})
+
+        comment.liked_by.add(user)
+        like_count = comment.liked_by.count()
+        return ResponseFactory.success('Comment successfully liked',
+                                       {'message': 'Comment successfully liked',
+                                        'like_count': like_count})
+
+    def delete(self, request, post_id, comment_id):
+        try:
+            comment = Comment.objects.get(pk=comment_id)
+        except Comment.DoesNotExist:
+            return ResponseFactory.not_found('Comment not found', 
+                                             {'message': 'Comment not found'})
+
+        if comment is None:
+            return ResponseFactory.not_found('Comment not found', 
+                                             {'message': 'Comment not found'})
+
+        user = request.user
+        if not comment.liked_by.filter(id=user.id).exists():
+            return ResponseFactory.conflict('Comment not liked', 
+                                            {'message': 'Comment not liked'})
+
+        comment.liked_by.remove(user)
+        like_count = comment.liked_by.count()
+        return ResponseFactory.deleted('Comment unliked', 
+                                       {'message': 'Comment unliked',
+                                        'like_count': like_count})
+
