@@ -81,7 +81,6 @@ def test_get_users_unauthorized(api_client, register_url, get_all_users_url, moc
     response = api_client.get(get_all_users_url, secure=True)
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
-
 @pytest.mark.django_db
 def test_login_user(api_client, initialize_groups, token_login_url, get_all_users_url, mock_admin_data):
     admin = UserFactory.create_admin_user(**mock_admin_data)
@@ -98,6 +97,91 @@ def test_login_user(api_client, initialize_groups, token_login_url, get_all_user
 
     assert login.status_code == status.HTTP_200_OK
     assert token is not None
+
+@pytest.mark.django_db
+def test_update_user_success(auth_login_client, populate_users, update_user_url):
+    user1, _, _ = populate_users
+    client = auth_login_client(user1.user.username, "1234")
+    url = update_user_url(user1.user.id)
+    data = {"username": "new_username"}
+    
+    response = client.patch(url, data, format='json')
+    
+    assert response.status_code == status.HTTP_200_OK
+    user1.user.refresh_from_db()
+    assert user1.user.username == "new_username"
+
+@pytest.mark.django_db
+def test_update_user_no_changes(auth_login_client, populate_users, update_user_url):
+    user1, _, _ = populate_users
+    client = auth_login_client(user1.user.username, "1234")
+    url = update_user_url(user1.user.id)
+    data = {"username": user1.user.username}
+    
+    response = client.patch(url, data, format='json')
+    
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["detail"] == "Provided values are the same as the current user data."
+
+@pytest.mark.django_db
+def test_update_user_empty_body(auth_login_client, populate_users, update_user_url):
+    user1, _, _ = populate_users
+    client = auth_login_client(user1.user.username, "1234")
+    url = update_user_url(user1.user.id)
+    data = {}
+    
+    response = client.patch(url, data, format='json')
+    
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["detail"] == "Request body is empty. Provide at least one field to update."
+
+@pytest.mark.django_db
+def test_update_user_duplicate_username(auth_login_client, populate_users, update_user_url):
+    user1, user2, _ = populate_users
+    client = auth_login_client(user1.user.username, "1234")
+    url = update_user_url(user1.user.id)
+    data = {"username": user2.user.username}
+    
+    response = client.patch(url, data, format='json')
+    
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["username"] == ["A user with that username already exists."]
+
+@pytest.mark.django_db
+def test_update_user_not_found(auth_login_client, populate_users, update_user_url):
+    user1, _, _ = populate_users
+    client = auth_login_client(user1.user.username, "1234")
+    url = update_user_url(9999)  # Non-existing user ID
+    data = {"username": "new_username"}
+    
+    response = client.patch(url, data, format='json')
+    
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data["detail"] == "User not found."
+
+@pytest.mark.django_db
+def test_delete_user_success(auth_login_client, populate_users, update_user_url):
+    user1, _, _ = populate_users
+    client = auth_login_client(user1.user.username, "1234")
+    url = update_user_url(user1.user.id)
+    
+    response = client.delete(url)
+    
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["detail"] == f"User deleted successfully."
+    assert not User.objects.filter(id=user1.user.id).exists()
+
+@pytest.mark.django_db
+def test_delete_user_not_found(auth_login_client, populate_users, update_user_url):
+    user1, _, _ = populate_users
+    client = auth_login_client(user1.user.username, "1234")
+    url = update_user_url(9999)  # Non-existing user ID
+    
+    response = client.delete(url)
+    
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data["detail"] == "User not found."
+
 
 @pytest.mark.django_db
 def test_change_user_role(api_client, admin_auth_client, get_all_users_url, change_role_url, mock_user_data, register_url):
