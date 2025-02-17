@@ -3,13 +3,17 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User, Group
-
+from django.db.models import Q, Value
+from django.db.models.functions import Concat
+from apps.posts.models import Comment
+from apps.posts.permissions import IsAuthor
+from apps.posts.serializers import CommentSerializer
 from utils.logger import Logger
 from utils.response_factory import ResponseFactory
 from .factories import UserFactory
 from .models import Profile
 from .permissions import IsAdmin
-from .serializers import UserSerializer, RoleSerializer
+from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer
 
 logger = Logger().get_logger()
 
@@ -56,8 +60,6 @@ class UserRegistrationView(APIView):
                 {"detail": "Token generation failed."}
             )
 
-
-
 class UserRoleView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
@@ -85,3 +87,115 @@ class UserRoleView(APIView):
                 "User not found",
                 {"detail": "User not found."}
             )
+
+class ProfileSearchSuggestionsView(APIView):
+    """
+    Returns a list of profiles based on a search query.
+    
+    The search query can be a username, first name, last name, or a combination
+    of the three.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        search_query = request.GET.get('search_query', '')
+        
+        if not search_query:
+            return ResponseFactory.bad_request(
+                "Search query is required",
+                {"detail": "Search query is required."}
+            )
+            
+        try:
+            # Combine first and last name as a searchable field
+            profiles = Profile.objects.annotate(
+                full_name=Concat('first_name', Value(' '), 'last_name')
+            ).filter(
+                Q(user__username__icontains=search_query) | 
+                Q(full_name__icontains=search_query)  # Enables full name search!
+            ).only('id', 'user__username', 'first_name', 'last_name')
+            
+            serializer = ProfileSearchSerializer(profiles, many=True)
+            
+            return ResponseFactory.success(
+                serializer.data,
+                serializer.data
+            )
+        except Exception as e:
+            return ResponseFactory.bad_request(
+                "An error occurred while processing the request",
+                {"detail": "An error occurred while processing the request."}
+            )
+        
+class ProfileView(APIView):
+    """
+    Returns the profile of the authenticated user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = Profile.objects.get(user=request.user)
+            serializer = UserSerializer(user)
+            return ResponseFactory.success(
+                serializer.data,
+                serializer.data
+            )
+            
+        except Profile.DoesNotExist:
+            return ResponseFactory.not_found(
+                "Profile not found",
+                {"detail": "Profile not found."}
+            )
+        except Exception as e:
+            return ResponseFactory.bad_request(
+                "An error occurred while processing the request",
+                {"detail": "An error occurred while processing the request."}
+            )
+        
+class ProfileByIDView(APIView):
+    """
+
+    Returns the profile of a user by ID or the profile of the authenticated user if
+    no ID is provided.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, user_id=None):
+        if user_id is None:
+            return ProfileView().get(request)
+        try:
+            user = Profile.objects.get(user__id=user_id)
+            serializer = UserSerializer(user)
+            return ResponseFactory.success(
+                serializer.data,
+                serializer.data
+            )
+        except Profile.DoesNotExist:
+            return ResponseFactory.not_found(
+                "Profile not found",
+                {"detail": "Profile not found."}
+            )
+        except Exception as e:
+            return ResponseFactory.bad_request(
+                "An error occurred while processing the request",
+                {"detail": "An error occurred while processing the request."}
+            )
+
+class PersonalCommentsView(APIView):
+    permission_classes = [IsAuthenticated, IsAuthor]
+
+    def get(self, request):
+        comments = Comment.objects.filter(author=request.user)
+        
+        if not comments.exists():
+            return ResponseFactory.not_found(
+                "No comments found",
+                {'Message': 'No comments found'}
+            )
+
+        serializer = CommentSerializer(comments, many=True)
+        return ResponseFactory.success(
+            serializer.data,
+            serializer.data
+        )
