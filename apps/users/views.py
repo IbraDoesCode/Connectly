@@ -1,6 +1,6 @@
 from tokenize import TokenError
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User, Group
 
@@ -10,19 +10,21 @@ from .factories import UserFactory
 from .models import Profile
 from .permissions import IsAdmin
 from .serializers import UserSerializer, RoleSerializer
+from rest_framework.generics import ListAPIView
 
 logger = Logger().get_logger()
 
-class UserListView(APIView):
+class UserListView(ListAPIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
     def get(self, request):
-        users = Profile.objects.all()
+        users = self.paginate_queryset(Profile.objects.all()) # Apply pagination
+        
+        # Serialize the paginated queryset
         serializer = UserSerializer(users, many=True)
-        return ResponseFactory.success(
-            serializer.data,
-            serializer.data,
-        )
+        
+        # Return the paginated response (with pagination metadata like 'next', 'previous')
+        return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
 
 
 class UserRegistrationView(APIView):
