@@ -1,3 +1,6 @@
+import json
+from django.test import override_settings
+from django.conf import settings
 import pytest
 from django.contrib.auth.models import User
 from django.urls import reverse
@@ -7,12 +10,26 @@ from apps.posts.factories import PostFactory, CommentFactory
 from apps.users.factories import UserFactory
 from django.contrib.auth.models import Group
 
+from utils.config_manager import ConfigManager
+from utils.rate_limiter import RateLimiterFactory
+
 # Initializer Fixtures
 @pytest.fixture
 def initialize_groups():
     Group.objects.get_or_create(name='Admin')
     Group.objects.get_or_create(name='Moderator')
-
+    
+@pytest.fixture(autouse=True)
+def disable_throttling(request):
+    original_rest_framework = settings.REST_FRAMEWORK.copy()
+    new_rest_framework = {
+        **original_rest_framework,
+        'DEFAULT_THROTTLE_CLASSES': [],
+        'DEFAULT_THROTTLE_RATES': {},
+    }
+    
+    with override_settings(REST_FRAMEWORK=new_rest_framework):
+        yield
 
 # Client Fixtures
 @pytest.fixture
@@ -22,10 +39,9 @@ def api_client():
 @pytest.fixture
 def auth_client(api_client, initialize_groups, register_url, mock_user_data):
     response = api_client.post(register_url, mock_user_data, secure=True, format='json')
-
+    
     token = response.data['access']
     api_client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
-
     return api_client
 
 @pytest.fixture
@@ -100,6 +116,23 @@ def comment_detail_url():
         return reverse('comment_detail', kwargs={'post_id': post_id, 'comment_id': comment_id})
     return _generate_url
 
+@pytest.fixture
+def like_post_url():
+    def _generate_url(post_id):
+        return reverse('like_post', kwargs={'post_id': post_id})
+    return _generate_url
+
+@pytest.fixture
+def like_comment_url():
+    def _generate_url(post_id, comment_id):
+        return reverse('like_comment', kwargs={'post_id': post_id, 'comment_id': comment_id})
+    return _generate_url
+
+@pytest.fixture
+def personal_comments_url():
+    def _generate_url():
+        return reverse('personal-comments')
+    return _generate_url
 
 # Mock Data Fixtures
 @pytest.fixture
@@ -116,8 +149,8 @@ def mock_user_data():
 @pytest.fixture
 def mock_admin_data():
     data = {
-        "username": "admin",
-        "email": "admin@super.com",
+        "username": "test_admin",
+        "email": "testadmin@super.com",
         "password": "1234",
         "first_name": "Admin",
         "last_name": "User",
