@@ -21,6 +21,8 @@ class Post(BaseModel):
     post_type = models.CharField(max_length=10, choices=POST_TYPES, default='text')
     metadata = models.JSONField(null=True, blank=True)
     liked_by = models.ManyToManyField(User, related_name='liked_posts')
+    image = models.ImageField(upload_to='post_images/', null=True, blank=True)
+    video = models.FileField(upload_to='post_videos/', null=True, blank=True)
 
     def save(self, *args, **kwargs):
         # Prevent changing the author if the post already exists
@@ -45,6 +47,7 @@ class Comment(BaseModel):
     comment_type = models.CharField(max_length=10, choices=COMMENT_TYPES, default='text')
     metadata = models.JSONField(null=True, blank=True)
     liked_by = models.ManyToManyField(User, related_name='liked_comments')
+    image = models.ImageField(upload_to='comment_images/', null=True, blank=True)
 
     def save(self, *args, **kwargs):
         # Prevent changing post if the comment already exists

@@ -3,7 +3,7 @@ from apps.posts.models import Post, Comment
 
 class PostFactory:
     @staticmethod
-    def create_post(author, post_type, content='', metadata=None):
+    def create_post(author, post_type, content='', metadata=None, image=None, video=None):
         if post_type not in dict(Post.POST_TYPES):
             raise ValueError('Invalid post type')
 
@@ -18,6 +18,8 @@ class PostFactory:
             post_type=post_type,
             content=content,
             metadata=metadata,
+            image=image,
+            video=video
         )
 
 class CommentFactory:

@@ -9,3 +9,5 @@ bcrypt
 djangorestframework-simplejwt
 pytest
 pytest-django
+Pillow
+ffmpeg
