@@ -9,3 +9,6 @@ private.key
 key.pem
 cert.*
 develop
+tests_report.html
+tests_report.pdf
+/.vscode

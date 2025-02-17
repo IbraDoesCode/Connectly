@@ -1,13 +1,17 @@
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, User
 from rest_framework import serializers
+from rest_framework.serializers import ValidationError
+
 from .factories import UserFactory
 from .models import Profile
 
 
 class UserSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
-    email = serializers.CharField(source='user.email')
+    email = serializers.EmailField(source='user.email')
     password = serializers.CharField(write_only=True)
+    first_name = serializers.CharField(required=True)
+    last_name = serializers.CharField(required=True)
     full_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -18,9 +22,19 @@ class UserSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}"
 
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise ValidationError("This username is already taken.")
+        return value
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise ValidationError("This email is already in use.")
+        return value
+
     def create(self, validated_data):
-        user_data = validated_data.pop('user')
-        password = validated_data.pop('password')
+        user_data = validated_data.pop('user', None)
+        password = validated_data.pop('password', None)
 
         profile = UserFactory.create_user_and_profile(
             username=user_data['username'],
@@ -44,3 +58,35 @@ class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = ['role']
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.username')
+
+    def validate(self, data):
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+
+        if ('first_name' in data and not last_name) or ('last_name' in data and not first_name):
+            raise serializers.ValidationError(
+                "Both 'first_name' and 'last_name' are required when updating either."
+            )
+
+        return data
+
+    class Meta:
+        model = Profile
+        fields = ['id', 'user', 'first_name', 'last_name', 'bio']
+
+        
+class ProfileSearchSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    full_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = ['id', 'username', 'full_name']
+        read_only_fields = ['id', 'username', 'full_name']
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}"

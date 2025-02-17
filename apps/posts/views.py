@@ -1,25 +1,30 @@
 # Create your views here.
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
 
 from utils.response_factory import ResponseFactory
 from .models import Post, Comment
 from .permissions import IsAuthor
 from .serializers import PostSerializer, CommentSerializer
+from rest_framework.generics import ListAPIView
 
 
 # Post List View (GET all posts)
-class PostListView(APIView):
+class PostListView(ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PostSerializer
 
-    def get(self, request):
-        # Get all posts
-        posts = Post.objects.all()
-        # Convert QuerySet to JSON
+    def get(self, request, *args, **kwargs):
+        # Get the queryset and paginate it manually
+        posts = self.paginate_queryset(Post.objects.all()) # Apply pagination
+        
+        # Serialize the paginated queryset
         serializer = PostSerializer(posts, many=True)
-        # Return JSON data
-        return ResponseFactory.success(serializer.data,serializer.data)
+        
+        # Return the paginated response (with pagination metadata like 'next', 'previous')
+        return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
+
 
     def post(self, request):
         # Take the data from the request and convert it to JSON
@@ -133,7 +138,7 @@ class PostDetailView(APIView):
 
 
 # Comment List View for a specific post
-class CommentListView(APIView):
+class CommentListView(ListAPIView):
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
 
@@ -148,16 +153,13 @@ class CommentListView(APIView):
             )
         
         # Get all comments for the post
-        comments = post.comments.all()
+        comments = self.paginate_queryset(post.comments.all()) # Apply pagination
         
         # Convert QuerySet to JSON
         serializer = CommentSerializer(comments, many=True)
         
         # Return JSON data
-        return ResponseFactory.success(
-            serializer.data,
-            serializer.data
-        )
+        return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
 
     def post(self, request, post_id):
         try:
@@ -292,3 +294,102 @@ class CommentDetailView(APIView):
             "Comment deleted successfully",
             {'Message': 'Comment deleted successfully'}
         )
+
+class LikePostView(APIView):
+    
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        # Find post by post_id
+        try:
+            post = Post.objects.get(pk=post_id)
+        except Post.DoesNotExist:
+            return ResponseFactory.not_found('Post not found', 
+                                             {'message': 'Post not found'})
+
+        # Check if the user already liked the post
+        user = request.user
+        #if not liked, add user to liked_by
+        if not post.liked_by.filter(id=user.id).exists():
+            post.liked_by.add(user)
+        #if liked, return message post already liked
+        else:
+            return ResponseFactory.conflict('Post already liked',
+                                             {'message': 'Post already liked'})
+
+        # Return Success response with updated like count
+        like_count = post.liked_by.count()   
+        return ResponseFactory.success('Post successfully liked',
+                                        {'message': 'Post successfully liked',
+                                        'like_count': like_count})
+
+    def delete(self, request, post_id):
+        # Find post by post_id
+        try:
+            post = Post.objects.get(pk=post_id)
+        except Post.DoesNotExist:
+            return ResponseFactory.not_found('Post not found', 
+                                             {'message': 'Post not found'})
+
+        # Check if the user already liked the post
+        user = request.user
+        # if  liked, remove user from liked_by
+        if post.liked_by.filter(id=user.id).exists():
+            post.liked_by.remove(user)
+        # if not liked, return message post not liked
+        else:
+            return ResponseFactory.conflict('Post not liked',
+                                             {'message': 'Post not liked'})
+
+        # Return success response with updated like count
+        like_count = post.liked_by.count()
+        return ResponseFactory.deleted('Post unliked', 
+                                       {'message': 'Post unliked',
+                                        'like_count': like_count})
+class LikeCommentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id, comment_id):
+        try:
+            comment = Comment.objects.get(pk=comment_id)
+        except Comment.DoesNotExist:
+            return ResponseFactory.not_found('Comment not found', 
+                                             {'message': 'Comment not found'})
+
+        if comment is None:
+            return ResponseFactory.not_found('Comment not found', 
+                                             {'message': 'Comment not found'})
+
+        user = request.user
+        if comment.liked_by.filter(id=user.id).exists():
+            return ResponseFactory.conflict('Comment already liked', 
+                                            {'message': 'Comment already liked'})
+
+        comment.liked_by.add(user)
+        like_count = comment.liked_by.count()
+        return ResponseFactory.success('Comment successfully liked',
+                                       {'message': 'Comment successfully liked',
+                                        'like_count': like_count})
+
+    def delete(self, request, post_id, comment_id):
+        try:
+            comment = Comment.objects.get(pk=comment_id)
+        except Comment.DoesNotExist:
+            return ResponseFactory.not_found('Comment not found', 
+                                             {'message': 'Comment not found'})
+
+        if comment is None:
+            return ResponseFactory.not_found('Comment not found', 
+                                             {'message': 'Comment not found'})
+
+        user = request.user
+        if not comment.liked_by.filter(id=user.id).exists():
+            return ResponseFactory.conflict('Comment not liked', 
+                                            {'message': 'Comment not liked'})
+
+        comment.liked_by.remove(user)
+        like_count = comment.liked_by.count()
+        return ResponseFactory.deleted('Comment unliked', 
+                                       {'message': 'Comment unliked',
+                                        'like_count': like_count})
+

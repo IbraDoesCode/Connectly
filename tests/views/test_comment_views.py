@@ -1,5 +1,6 @@
 import pytest
 from rest_framework import status
+from django.contrib.auth.models import User
 
 from apps.posts.models import Comment
 
@@ -86,6 +87,16 @@ def test_delete_comment(comment_detail_url, populate_comments, auth_login_client
     assert not Comment.objects.filter(id=comm4.id).exists()
 
 
+@pytest.mark.django_db
+def test_cascade_delete_post_comment(post_detail_url, populate_comments, auth_login_client):
+    comm1, comm2, comm3, comm4 = populate_comments
+
+    login = auth_login_client(comm4.post.author.username, '1234')
+    response = login.delete(post_detail_url(comm4.post.id), secure=True, format='json')
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert not Comment.objects.filter(id=comm4.id).exists()
+
 
 @pytest.mark.django_db
 def test_delete_comment_not_author(comment_detail_url, populate_comments, auth_login_client):
@@ -96,3 +107,50 @@ def test_delete_comment_not_author(comment_detail_url, populate_comments, auth_l
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert Comment.objects.filter(id=comm3.id).exists()
+    
+    
+@pytest.mark.django_db
+def test_like_comment(auth_client, like_comment_url, populate_posts, populate_comments):
+    """Test that a comment can be liked."""
+    post1, post2, post3, post4 = populate_posts
+    comm1, _, _, _ = populate_comments
+    client = auth_client
+
+    like_url = like_comment_url(post1.id, comm1.id)
+
+    response = client.post(like_url, secure=True, format='json')
+    try:
+        user_id = User.objects.get(username='test_user').id
+    except User.DoesNotExist:
+        pytest.fail("Test user does not exist")
+
+    # Check that the comment is liked and that the like count is correct
+    assert response.status_code == status.HTTP_200_OK
+    assert comm1.liked_by.filter(id=user_id).exists()
+    assert comm1.liked_by.count() == 1
+
+    # Check that if the comment is already liked, the like count is not increased
+    response_duplicate = client.post(like_url, secure=True, format='json')
+    assert response_duplicate.status_code == status.HTTP_409_CONFLICT
+
+@pytest.mark.django_db
+def test_unlike_comment(auth_client, like_comment_url, populate_posts, populate_comments):
+    """Test that a comment can be unliked."""
+    post1, post2, post3, post4 = populate_posts
+    comm1, _, _, _ = populate_comments
+    client = auth_client
+
+    like_url = like_comment_url(post1.id, comm1.id)
+
+    # First, like the comment
+    response_like = client.post(like_url, secure=True, format='json')
+    assert response_like.status_code == status.HTTP_200_OK
+
+    # Then, unlike the comment and that the like count is correct
+    response_unlike = client.delete(like_url, secure=True, format='json')
+    assert response_unlike.status_code == status.HTTP_204_NO_CONTENT
+    assert comm1.liked_by.count() == 0
+
+    # Finally, try to unlike the comment again and check that it fails
+    response_unlike_again = client.delete(like_url, secure=True, format='json')
+    assert response_unlike_again.status_code == status.HTTP_409_CONFLICT
