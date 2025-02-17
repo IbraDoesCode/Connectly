@@ -44,12 +44,24 @@ class UserSerializer(serializers.ModelSerializer):
         )
 
         return profile
-
+        
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if self.context and self.context['request'].method == 'POST':
             data.pop('full_name', None)
         return data
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['username', 'email']
+
+    def update(self, instance, validated_data):
+        """Update the user instance with validated data."""
+        instance.username = validated_data.get('username', instance.username)
+        instance.email = validated_data.get('email', instance.email)
+        instance.save()
+        return instance
 
 
 class RoleSerializer(serializers.ModelSerializer):
