@@ -1,3 +1,4 @@
+from django.http import JsonResponse
 from utils.logger import Logger
 from rest_framework.response import Response
 from rest_framework import status
@@ -29,8 +30,18 @@ class ResponseFactory:
     def not_found(message, data=None):
         ResponseFactory.logger.error(message)
         return Response(data, status=status.HTTP_404_NOT_FOUND)
+    
+    @staticmethod
+    def conflict(message, data=None):
+        ResponseFactory.logger.info(message)
+        return Response(data, status=status.HTTP_409_CONFLICT)
 
     @staticmethod
     def internal_server_error(message, data=None):
         ResponseFactory.logger.error(message)
         return Response(data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @staticmethod
+    def too_many_requests(message, data=None):
+        ResponseFactory.logger.error(message)
+        return Response(data, status=status.HTTP_429_TOO_MANY_REQUESTS)
