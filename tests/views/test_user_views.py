@@ -1,3 +1,4 @@
+from django.urls import reverse
 import pytest
 from django.contrib.auth.models import User
 from rest_framework import status
@@ -35,8 +36,10 @@ def test_user_registration_missing_field(api_client, register_url):
     response = api_client.post(register_url, data, secure=True, format='json')
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert 'username' in response.data
-    assert User.objects.count() == 0
+    assert 'username' in response.data  # Ensure username validation error is present
+    assert 'first_name' in response.data  # Ensure first_name is required
+    assert 'last_name' in response.data  # Ensure last_name is required
+    assert User.objects.filter(email="testuser@example.com").count() == 0  # Ensure no user is created
 
 
 @pytest.mark.django_db
@@ -131,3 +134,126 @@ def test_change_user_role(api_client, admin_auth_client, get_all_users_url, chan
     api_client.credentials(**user_creds)
     response2 = api_client.get(get_all_users_url, secure=True)
     assert response1.status_code == status.HTTP_403_FORBIDDEN
+    
+@pytest.mark.django_db
+def test_profile_search_suggestions_username(auth_client, populate_users):
+    user1, _, _ = populate_users
+    search_url = reverse('profile-search-suggestions') + "?search_query=user1"
+    response = auth_client.get(search_url, secure=True)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data) == 1  # Expecting only user1
+    assert response.data[0]['username'] == 'user1'
+    assert response.data[0]['full_name'] == 'User1 Lastname1'
+
+@pytest.mark.django_db
+def test_profile_search_suggestions_fullname(auth_client, populate_users):
+    _, user2, _ = populate_users
+    search_url = reverse('profile-search-suggestions') + "?search_query=User2%20Lastname2"
+    response = auth_client.get(search_url, secure=True)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data) == 1  # Expecting only user2
+    assert response.data[0]['username'] == 'user2'
+    assert response.data[0]['full_name'] == 'User2 Lastname2'
+
+@pytest.mark.django_db
+def test_profile_search_suggestions_incomplete_name(auth_client, populate_users):
+    user1, _, _ = populate_users
+    search_url = reverse('profile-search-suggestions') + "?search_query=user"
+    response = auth_client.get(search_url, secure=True)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data) >= 1  # Expecting multiple users
+    assert response.data[0]['username'] == 'test_user'
+    assert response.data[0]['full_name'] == 'Test User'
+
+@pytest.mark.django_db
+def test_profile_search_suggestions_case_insensitive(auth_client, populate_users):
+    _, user2, _ = populate_users
+    search_url = reverse('profile-search-suggestions') + "?search_query=uSeR2%20LaStNaMe2"
+    response = auth_client.get(search_url, secure=True)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data) == 1  # Expecting only user2
+    assert response.data[0]['username'] == 'user2'
+    assert response.data[0]['full_name'] == 'User2 Lastname2'
+
+@pytest.mark.django_db
+def test_profile_search_suggestions_no_query(auth_client):
+    search_url = reverse('profile-search-suggestions')
+    response = auth_client.get(search_url, secure=True)
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'detail' in response.data
+    assert response.data['detail'] == 'Search query is required.'
+
+@pytest.mark.django_db
+def test_profile_search_suggestions_no_match(auth_client):
+    search_url = reverse('profile-search-suggestions') + "?search_query=NonExistent"
+    response = auth_client.get(search_url, secure=True)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data) == 0  # No results found
+
+@pytest.mark.django_db
+def test_get_own_profile(auth_client, populate_users):
+    user1, _, _ = populate_users  # Use the first user
+    auth_client.force_authenticate(user=user1.user)
+    profile_url = reverse('user-profile')
+    response = auth_client.get(profile_url, secure=True)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['first_name'] == user1.first_name
+    assert response.data['last_name'] == user1.last_name
+
+@pytest.mark.django_db
+def test_get_own_profile_not_authenticated(api_client):
+    profile_url = reverse('user-profile')
+    response = api_client.get(profile_url, secure=True)
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+@pytest.mark.django_db
+def test_get_profile_by_id(auth_client, populate_users):
+    user1, user2, _ = populate_users
+    profile_url = reverse('user-profile-from-id', kwargs={'user_id': user2.user.id})
+    response = auth_client.get(profile_url, secure=True)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['first_name'] == user2.first_name
+    assert response.data['last_name'] == user2.last_name
+
+@pytest.mark.django_db
+def test_get_profile_by_invalid_id(auth_client):
+    profile_url = reverse('user-profile-from-id', kwargs={'user_id': 9999})
+    response = auth_client.get(profile_url, secure=True)
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert 'detail' in response.data
+    assert response.data['detail'] == 'Profile not found.'
+    
+import pytest
+from rest_framework import status
+
+@pytest.mark.django_db
+def test_get_personal_comments_success(auth_login_client, personal_comments_url, populate_comments):
+    comm1, _, _, _ = populate_comments
+    client = auth_login_client(comm1.author.username, '1234')
+    response = client.get(personal_comments_url(), secure=True, format='json')
+    assert response.status_code == status.HTTP_200_OK
+    assert isinstance(response.data, list)
+    assert len(response.data) > 0  # Ensure user has comments
+
+
+@pytest.mark.django_db
+def test_get_personal_comments_empty(auth_client, personal_comments_url):
+    response = auth_client.get(personal_comments_url(), secure=True, format='json')  
+    assert response.status_code == status.HTTP_404_NOT_FOUND 
+    assert response.data["Message"] == "No comments found"
+
+
+@pytest.mark.django_db
+def test_unauthenticated_user_access(api_client, personal_comments_url):
+    response = api_client.get(personal_comments_url(), secure=True, format='json')
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

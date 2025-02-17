@@ -10,6 +10,8 @@ class UserSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
     password = serializers.CharField(write_only=True)
+    first_name = serializers.CharField(required=True)
+    last_name = serializers.CharField(required=True)
     full_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -31,8 +33,8 @@ class UserSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        user_data = validated_data.pop('user')
-        password = validated_data.pop('password')
+        user_data = validated_data.pop('user', None)
+        password = validated_data.pop('password', None)
 
         profile = UserFactory.create_user_and_profile(
             username=user_data['username'],
@@ -56,3 +58,16 @@ class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = ['role']
+        
+        
+class ProfileSearchSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    full_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = ['id', 'username', 'full_name']
+        read_only_fields = ['id', 'username', 'full_name']
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}"

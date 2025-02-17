@@ -116,11 +116,22 @@ def comment_detail_url():
         return reverse('comment_detail', kwargs={'post_id': post_id, 'comment_id': comment_id})
     return _generate_url
 
-
 @pytest.fixture
 def like_post_url():
     def _generate_url(post_id):
         return reverse('like_post', kwargs={'post_id': post_id})
+    return _generate_url
+
+@pytest.fixture
+def like_comment_url():
+    def _generate_url(post_id, comment_id):
+        return reverse('like_comment', kwargs={'post_id': post_id, 'comment_id': comment_id})
+    return _generate_url
+
+@pytest.fixture
+def personal_comments_url():
+    def _generate_url():
+        return reverse('personal-comments')
     return _generate_url
 
 # Mock Data Fixtures
@@ -138,8 +149,8 @@ def mock_user_data():
 @pytest.fixture
 def mock_admin_data():
     data = {
-        "username": "admin",
-        "email": "admin@super.com",
+        "username": "test_admin",
+        "email": "testadmin@super.com",
         "password": "1234",
         "first_name": "Admin",
         "last_name": "User",
