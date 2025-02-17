@@ -4,11 +4,11 @@ from rest_framework.views import APIView
 
 from utils.response_factory import ResponseFactory
 from .models import Post, Comment
-from .permissions import IsAuthor
+from .permissions import IsAuthor, IsOwnerOrReadOnly
 from .serializers import PostSerializer, CommentSerializer
 
 
-# Post List View (GET all posts)
+# Post List View (GET all posts, POST new post)
 class PostListView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PostSerializer
@@ -42,17 +42,11 @@ class PostListView(APIView):
             serializer.data
         )
 
-
 # Post Detail View (GET, PUT, DELETE a single post)
 class PostDetailView(APIView):
     serializer_class = PostSerializer
 
-    # Overrides the permission to allow GET of a single post even if the user is not the author
-    def get_permissions(self):
-        if self.request.method == 'GET':
-            return [IsAuthenticated()]
-        return [IsAuthenticated(), IsAuthor()]
-
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
 
     def get(self, request, post_id):
         try:
@@ -122,7 +116,8 @@ class PostDetailView(APIView):
 
             # Return an ok response
             return ResponseFactory.deleted(
-                f"Post deleted successfully",
+                "Post deleted successfully",
+                {'Message': 'Post deleted successfully'}
             )
         except Post.DoesNotExist:
             # Throw an error if the post with the specified id is not found
@@ -130,7 +125,6 @@ class PostDetailView(APIView):
                 "Error deleting post",
                 {'Message': 'Post not found'}
             )
-
 
 # Comment List View for a specific post
 class CommentListView(APIView):
