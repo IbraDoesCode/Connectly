@@ -30,25 +30,7 @@ def disable_throttling(request):
     
     with override_settings(REST_FRAMEWORK=new_rest_framework):
         yield
-        
-@pytest.fixture(scope="function")
-def enable_throttling(request):
-    original_rest_framework = settings.REST_FRAMEWORK.copy()
-    new_rest_framework = {
-        **original_rest_framework,
-        'DEFAULT_THROTTLE_CLASSES': [
-            'rest_framework.throttling.AnonRateThrottle',  
-            'rest_framework.throttling.UserRateThrottle',
-        ],
-        'DEFAULT_THROTTLE_RATES': {
-            'anon': '10/minute',
-            'user': '2/second',
-        },
-    }
-    
-    with override_settings(REST_FRAMEWORK=new_rest_framework):
-        yield
-    
+
 # Client Fixtures
 @pytest.fixture
 def api_client():
