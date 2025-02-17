@@ -12,8 +12,8 @@ from utils.logger import Logger
 from utils.response_factory import ResponseFactory
 from .factories import UserFactory
 from .models import Profile
-from .permissions import IsAdmin
-from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer
+from .permissions import IsAdmin, IsOwnerOrAdmin
+from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer, UserUpdateSerializer
 
 logger = Logger().get_logger()
 
@@ -28,6 +28,77 @@ class UserListView(APIView):
             serializer.data,
         )
 
+class UserUpdateView(APIView):
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+
+    def patch(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            
+            # Check if request body is empty
+            if not request.data:
+                return ResponseFactory.bad_request(
+                    "No changes were provided.",
+                    {"detail": "Request body is empty. Provide at least one field to update."}
+                )
+            
+            
+            serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+
+            if not serializer.is_valid():
+                return ResponseFactory.bad_request(
+                    f"Error updating user {user.username}",
+                    serializer.errors
+                )
+                
+                
+            # Check if provided data is identical to current user data
+            if all(getattr(user, field) == value for field, value in request.data.items()):
+                return ResponseFactory.bad_request(
+                    "No changes detected.",
+                    {"detail": "Provided values are the same as the current user data."}
+                )
+
+            updated_user = serializer.save()
+
+            return ResponseFactory.success(
+                f"User {updated_user.username} updated successfully",
+                serializer.data
+            )
+
+        except User.DoesNotExist:
+            return ResponseFactory.not_found(
+                "User not found",
+                {"detail": "User not found."}
+            )
+        except Exception as e:
+            return ResponseFactory.bad_request(
+                f"An error occurred when updating the user: {str(e)}",
+                {"detail": "An error occurred when updating the user."}
+            )
+
+
+    def delete(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+
+            user.delete()
+
+            return ResponseFactory.success(
+                f"User {user.username} deleted successfully",
+                {"detail": "User deleted successfully."}
+            )
+
+        except User.DoesNotExist as e:
+            return ResponseFactory.not_found(
+                "User not found.",
+                {"detail": "User not found."}
+            )
+        except Exception as e:
+            return ResponseFactory.bad_request(
+                f"An error occurred when deleting the user: {str(e)}",
+                {"detail": "An error occurred when deleting the user."}
+            )
 
 class UserRegistrationView(APIView):
     def post(self, request):
@@ -123,7 +194,7 @@ class ProfileSearchSuggestionsView(APIView):
             )
         except Exception as e:
             return ResponseFactory.bad_request(
-                "An error occurred while processing the request",
+                f"An error occurred while processing the request: {str(e)}",
                 {"detail": "An error occurred while processing the request."}
             )
         
@@ -149,7 +220,7 @@ class ProfileView(APIView):
             )
         except Exception as e:
             return ResponseFactory.bad_request(
-                "An error occurred while processing the request",
+                f"An error occurred while processing the request: {str(e)}",
                 {"detail": "An error occurred while processing the request."}
             )
         
@@ -178,7 +249,7 @@ class ProfileByIDView(APIView):
             )
         except Exception as e:
             return ResponseFactory.bad_request(
-                "An error occurred while processing the request",
+                f"An error occurred while processing the request: {str(e)}",
                 {"detail": "An error occurred while processing the request."}
             )
 
