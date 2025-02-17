@@ -81,6 +81,12 @@ def register_url():
     return reverse('user-register')
 
 @pytest.fixture
+def update_user_url():
+    def _generate_url(user_id):
+        return reverse('user-update', kwargs={'user_id': user_id})
+    return _generate_url
+
+@pytest.fixture
 def get_all_users_url():
     return reverse('user_list')
 
