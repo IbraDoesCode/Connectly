@@ -56,9 +56,11 @@ def test_get_users(admin_auth_client, get_all_users_url, mock_user_data):
 
     response_data = response.json()
 
-    assert len(response_data) == 2
-    assert any(user['username'] == 'admin' for user in response_data)
-    assert any(user['username'] == user1.user.username for user in response_data)
+    assert len(response_data) == 4
+    assert 'results' in response_data
+    assert len(response_data['results']) == 2 
+    assert any(user['username'] == 'admin' for user in response_data["results"])
+    assert any(user['username'] == user1.user.username for user in response_data["results"])
 
 
 @pytest.mark.django_db
