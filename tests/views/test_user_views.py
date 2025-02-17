@@ -59,9 +59,11 @@ def test_get_users(admin_auth_client, get_all_users_url, mock_user_data):
 
     response_data = response.json()
 
-    assert len(response_data) == 2 | 3 #included "or 3" incase a default user admin was initialized
-    assert any(user['username'] == 'admin' for user in response_data)
-    assert any(user['username'] == user1.user.username for user in response_data)
+    assert len(response_data) == 4
+    assert 'results' in response_data
+    assert len(response_data['results']) == 3
+    assert any(user['username'] == 'admin' for user in response_data["results"])
+    assert any(user['username'] == user1.user.username for user in response_data["results"])
 
 
 @pytest.mark.django_db
@@ -216,6 +218,49 @@ def test_change_user_role(api_client, admin_auth_client, get_all_users_url, chan
     api_client.credentials(**user_creds)
     response2 = api_client.get(get_all_users_url, secure=True)
     assert response1.status_code == status.HTTP_403_FORBIDDEN
+
+@pytest.mark.django_db
+def test_profile_update_bio(auth_client, populate_users):
+    user1, _, _ = populate_users
+    search_url = reverse('user-profile')
+    response = auth_client.patch(
+        search_url,
+        {"bio": "This is a bioflu"},
+        secure=True,
+        format='json'
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['bio'] == 'This is a bioflu'
+
+@pytest.mark.django_db
+def test_profile_update_firstname_only(auth_client, populate_users):
+    user1, _, _ = populate_users
+    search_url = reverse('user-profile')
+    response = auth_client.patch(
+        search_url,
+        {"first_name": "Gerard"},
+        secure=True,
+        format='json'
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data['non_field_errors'][0] == "Both 'first_name' and 'last_name' are required when updating either."
+
+
+@pytest.mark.django_db
+def test_delete_user_profile(admin_auth_client, get_all_users_url, mock_user_data):
+    user1 = UserFactory.create_user_and_profile(**mock_user_data)
+
+    assert Profile.objects.filter(id=user1.id).exists()
+
+    search_url = reverse('user-profile-from-id', kwargs={'user_id': user1.user.id})
+    response = admin_auth_client.delete(search_url, secure=True)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert not Profile.objects.filter(id=user1.id).exists()
+    assert not User.objects.filter(id=user1.user.id).exists()
+
     
 @pytest.mark.django_db
 def test_profile_search_suggestions_username(auth_client, populate_users):

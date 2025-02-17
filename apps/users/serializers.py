@@ -70,7 +70,26 @@ class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = ['role']
-        
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.username')
+
+    def validate(self, data):
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+
+        if ('first_name' in data and not last_name) or ('last_name' in data and not first_name):
+            raise serializers.ValidationError(
+                "Both 'first_name' and 'last_name' are required when updating either."
+            )
+
+        return data
+
+    class Meta:
+        model = Profile
+        fields = ['id', 'user', 'first_name', 'last_name', 'bio']
+
         
 class ProfileSearchSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
