@@ -1,3 +1,6 @@
+import json
+from django.test import override_settings
+from django.conf import settings
 import pytest
 from django.contrib.auth.models import User
 from django.urls import reverse
@@ -15,30 +18,37 @@ from utils.rate_limiter import RateLimiterFactory
 def initialize_groups():
     Group.objects.get_or_create(name='Admin')
     Group.objects.get_or_create(name='Moderator')
-
-# Middleware Fixtures
-@pytest.fixture(autouse=True)
-def disable_rate_limiting(monkeypatch, request):
-    # Disable rate limiting for all tests except test_rate_limiter.py
-    if "test_rate_limiter.py" not in str(request.fspath):
-        def mock_check_rate_limit(*args, **kwargs):
-            return True
-            
-        monkeypatch.setattr('utils.rate_limiter.InMemoryRateLimiter.check_rate_limit', 
-                            mock_check_rate_limit)
-        
-@pytest.fixture(scope="session")
-def middleware_config():
-    config = ConfigManager()
-    config.set_settings("RATE_LIMIT_MAX_REQUESTS", 2)
-    config.set_settings("RATE_LIMIT_TIME_WINDOW", 1)
-    config.set_settings("RATE_LIMIT_CLEANUP_INTERVAL", 10)
-    return config
     
-@pytest.fixture
-def rate_limiter(middleware_config):
-    return RateLimiterFactory.create_rate_limiter("memory")
-
+@pytest.fixture(autouse=True)
+def disable_throttling(request):
+    original_rest_framework = settings.REST_FRAMEWORK.copy()
+    new_rest_framework = {
+        **original_rest_framework,
+        'DEFAULT_THROTTLE_CLASSES': [],
+        'DEFAULT_THROTTLE_RATES': {},
+    }
+    
+    with override_settings(REST_FRAMEWORK=new_rest_framework):
+        yield
+        
+@pytest.fixture(scope="function")
+def enable_throttling(request):
+    original_rest_framework = settings.REST_FRAMEWORK.copy()
+    new_rest_framework = {
+        **original_rest_framework,
+        'DEFAULT_THROTTLE_CLASSES': [
+            'rest_framework.throttling.AnonRateThrottle',  
+            'rest_framework.throttling.UserRateThrottle',
+        ],
+        'DEFAULT_THROTTLE_RATES': {
+            'anon': '10/minute',
+            'user': '2/second',
+        },
+    }
+    
+    with override_settings(REST_FRAMEWORK=new_rest_framework):
+        yield
+    
 # Client Fixtures
 @pytest.fixture
 def api_client():
@@ -47,10 +57,9 @@ def api_client():
 @pytest.fixture
 def auth_client(api_client, initialize_groups, register_url, mock_user_data):
     response = api_client.post(register_url, mock_user_data, secure=True, format='json')
-
+    
     token = response.data['access']
     api_client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
-
     return api_client
 
 @pytest.fixture
