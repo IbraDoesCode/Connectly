@@ -1,3 +1,6 @@
+import json
+from django.test import override_settings
+from django.conf import settings
 import pytest
 from django.contrib.auth.models import User
 from django.urls import reverse
@@ -7,12 +10,26 @@ from apps.posts.factories import PostFactory, CommentFactory
 from apps.users.factories import UserFactory
 from django.contrib.auth.models import Group
 
+from utils.config_manager import ConfigManager
+from utils.rate_limiter import RateLimiterFactory
+
 # Initializer Fixtures
 @pytest.fixture
 def initialize_groups():
     Group.objects.get_or_create(name='Admin')
     Group.objects.get_or_create(name='Moderator')
-
+    
+@pytest.fixture(autouse=True)
+def disable_throttling(request):
+    original_rest_framework = settings.REST_FRAMEWORK.copy()
+    new_rest_framework = {
+        **original_rest_framework,
+        'DEFAULT_THROTTLE_CLASSES': [],
+        'DEFAULT_THROTTLE_RATES': {},
+    }
+    
+    with override_settings(REST_FRAMEWORK=new_rest_framework):
+        yield
 
 # Client Fixtures
 @pytest.fixture
@@ -22,10 +39,9 @@ def api_client():
 @pytest.fixture
 def auth_client(api_client, initialize_groups, register_url, mock_user_data):
     response = api_client.post(register_url, mock_user_data, secure=True, format='json')
-
+    
     token = response.data['access']
     api_client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
-
     return api_client
 
 @pytest.fixture
