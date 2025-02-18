@@ -10,6 +10,11 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
 
+class MediaModel(BaseModel):
+    metadata = models.JSONField(null=True, blank=True)
+    class Meta:
+        abstract = True
+        
 class Post(BaseModel):
     POST_TYPES = [
         ('text', 'Text'),
@@ -19,7 +24,6 @@ class Post(BaseModel):
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     content = models.TextField(blank=False)
     post_type = models.CharField(max_length=10, choices=POST_TYPES, default='text')
-    metadata = models.JSONField(null=True, blank=True)
     liked_by = models.ManyToManyField(User, related_name='liked_posts')
 
     def save(self, *args, **kwargs):
@@ -34,6 +38,20 @@ class Post(BaseModel):
     def __str__(self):
         return f"Post by {self.author.username} at {self.created_at}"
 
+class PostImage(MediaModel):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='post_images/')
+
+    def __str__(self):
+        return f"Image for post {self.post.id}"
+
+class PostVideo(MediaModel):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='videos')
+    video = models.FileField(upload_to='post_videos/')
+
+    def __str__(self):
+        return f"Video for post {self.post.id}"
+
 class Comment(BaseModel):
     COMMENT_TYPES = [
         ('text', 'Text'),
@@ -43,7 +61,6 @@ class Comment(BaseModel):
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
     content = models.TextField(blank=False)
     comment_type = models.CharField(max_length=10, choices=COMMENT_TYPES, default='text')
-    metadata = models.JSONField(null=True, blank=True)
     liked_by = models.ManyToManyField(User, related_name='liked_comments')
 
     def save(self, *args, **kwargs):
@@ -57,3 +74,10 @@ class Comment(BaseModel):
 
     def __str__(self):
         return f"Comment by {self.author.username} on Post ID {self.post.id}"
+    
+class CommentImage(MediaModel):
+    comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='comment_images/')
+
+    def __str__(self):
+        return f"Image for comment {self.comment.id}"
