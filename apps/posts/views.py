@@ -1,8 +1,6 @@
 # Create your views here.
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from rest_framework.pagination import PageNumberPagination
-
 from utils.response_factory import ResponseFactory
 from .models import Post, Comment
 from .permissions import IsAuthor, IsOwnerOrReadOnly
