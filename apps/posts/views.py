@@ -11,7 +11,7 @@ from rest_framework.generics import ListAPIView
 
 
 # Post List View (GET all posts, POST new post)
-class PostListView(APIView):
+class PostListView(ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PostSerializer
 
