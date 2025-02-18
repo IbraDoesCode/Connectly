@@ -1,3 +1,4 @@
+import io
 import json
 from django.test import override_settings
 from django.conf import settings
@@ -12,6 +13,9 @@ from django.contrib.auth.models import Group
 
 from utils.config_manager import ConfigManager
 from utils.rate_limiter import RateLimiterFactory
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 
 # Initializer Fixtures
 @pytest.fixture
@@ -60,7 +64,6 @@ def auth_login_client(api_client, initialize_groups, token_login_url):
 
         return api_client
     return _generate_client
-
 
 @pytest.fixture
 def admin_auth_client(api_client, initialize_groups, register_url, mock_admin_data):
@@ -179,6 +182,128 @@ def mock_comment_data():
     }
     return data
 
+# Media File Fixtures
+@pytest.fixture
+def test_image():
+    # Create a test image in memory
+    file = io.BytesIO()
+    image = Image.new('RGB', (100, 100), color='red')
+    image.save(file, 'png')
+    file.name = 'test.png'
+    file.seek(0)
+    return SimpleUploadedFile('test.png', file.read(), content_type='image/png')
+
+@pytest.fixture
+def test_video():
+    """Create a minimal valid MP4 file"""
+    # This is a minimal valid MP4 file header
+    mp4_header = (
+        b'\x00\x00\x00\x20\x66\x74\x79\x70\x69\x73\x6F\x6D\x00\x00\x02\x00'
+        b'\x69\x73\x6F\x6D\x69\x73\x6F\x32\x6D\x70\x34\x31\x00\x00\x00\x08'
+        b'\x6D\x6F\x6F\x76'
+    )
+    return SimpleUploadedFile(
+        'test.mp4',
+        mp4_header,
+        content_type='video/mp4'
+    )
+
+@pytest.fixture
+def test_invalid_image():
+    # Create a small test image with invalid format
+    image_content = b'fake image content'
+    return SimpleUploadedFile('test.txt', image_content, content_type='image/png')
+
+@pytest.fixture
+def test_invalid_video():
+    # Create a small test video with invalid format
+    video_content = b'fake video content'
+    return SimpleUploadedFile('test.txt', video_content, content_type='video/mp4')
+
+@pytest.fixture
+def mock_post_with_image_data(test_image):
+    return {
+        "content": "Test Post with Image",
+        "post_type": "image",
+        "images": [test_image]
+    }
+
+@pytest.fixture
+def mock_post_with_video_data(test_video):
+    return {
+        "content": "Test Post with Video",
+        "post_type": "video",
+        "videos": [test_video]
+    }
+    
+@pytest.fixture
+def mock_post_with_invalid_image(test_invalid_image):
+    return {
+        "content": "Test Post with Image",
+        "post_type": "image",
+        "images": [test_invalid_image]
+    }
+
+@pytest.fixture
+def mock_post_with_invalid_video(test_invalid_video):
+    return {
+        "content": "Test Post with Video",
+        "post_type": "video",
+        "videos": [test_invalid_video]
+    }
+    
+@pytest.fixture
+def mock_comment_with_image_data(test_image):
+    return {
+        "content": "Test Comment with Image",
+        "comment_type": "image",
+        "image": test_image
+    }
+    
+@pytest.fixture
+def mock_comment_with_invalid_image(test_invalid_image):
+    return {
+        "content": "Test Comment with Image",
+        "comment_type": "image",
+        "image": test_image
+    }
+    
+@pytest.fixture()
+def mock_image_processing(monkeypatch):
+    """Mock image processing to avoid actual operations with PIL"""
+
+    def mock_compress_image(image, output_path=None, quality=85, max_width=1200, max_height=1200):
+        return image
+
+    def mock_extract_image_metadata(image_file):
+        return {
+            'width': 800,
+            'height': 600,
+            'file_size': len(image_file.read()),
+            'file_type': 'JPEG'
+        }
+
+    from utils.media_compressor import MediaCompressor
+    monkeypatch.setattr(MediaCompressor, 'compress_image', mock_compress_image)
+    monkeypatch.setattr(MediaCompressor, 'extract_image_metadata', mock_extract_image_metadata)
+
+@pytest.fixture()
+def mock_video_processing(monkeypatch):
+    """Mock video processing to avoid actual ffmpeg operations"""
+    def mock_compress_video(video_file):
+        return video_file
+        
+    def mock_extract_metadata(video_file):
+        return {
+            'width': 1280,
+            'height': 720,
+            'duration': 10.0,
+            'file_size': len(video_file.read())
+        }
+    
+    from utils.media_compressor import MediaCompressor
+    monkeypatch.setattr(MediaCompressor, 'compress_video', mock_compress_video)
+    monkeypatch.setattr(MediaCompressor, 'extract_video_metadata', mock_extract_metadata)
 
 # Populate Database
 @pytest.fixture
