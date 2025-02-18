@@ -1,8 +1,8 @@
 from tokenize import TokenError
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import User
 from django.db.models import Q, Value
 from django.db.models.functions import Concat
 from apps.posts.models import Comment
@@ -11,11 +11,11 @@ from apps.posts.serializers import CommentSerializer
 from utils.logger import Logger
 from utils.response_factory import ResponseFactory
 from .factories import UserFactory
-from .models import Profile
+from .models import Profile, Follow
 from .permissions import IsAdmin, IsOwnerOrAdmin
 from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer, UserUpdateSerializer
 from rest_framework.generics import ListAPIView
-from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer
+from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer, FollowSerializer, UnfollowSerializer
 
 
 logger = Logger().get_logger()
@@ -314,3 +314,32 @@ class PersonalCommentsView(APIView):
             serializer.data,
             serializer.data
         )
+
+class FollowView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = FollowSerializer(data=request.data, context={'request': request})
+        
+        if serializer.is_valid():
+            serializer.save()
+            return ResponseFactory.created("Followed Successfully", {"Message": "Followed successfully"})
+        return ResponseFactory.bad_request("Error", {"Error": serializer.errors})
+    
+class UnfollowView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = UnfollowSerializer(data=request.data, context={'request': request})
+        
+        if serializer.is_valid():
+            user_id = serializer.validated_data['user_id']
+            user_to_unfollow = User.objects.get(id=user_id)
+            follow_instance = Follow.objects.filter(follower=request.user, followed=user_to_unfollow)
+            
+            if follow_instance.exists():
+                follow_instance.delete()
+                return ResponseFactory.success("User unfollowed successfully", {"Message": "User unfollowed successfully."})
+            return ResponseFactory.bad_request("Not following", {"Message": "You are not following this user."})
+        return ResponseFactory.bad_request("Error", {"Error": serializer.errors})
+    
