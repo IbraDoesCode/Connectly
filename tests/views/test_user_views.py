@@ -360,8 +360,6 @@ def test_get_profile_by_invalid_id(auth_client):
     assert 'detail' in response.data
     assert response.data['detail'] == 'Profile not found.'
     
-import pytest
-from rest_framework import status
 
 @pytest.mark.django_db
 def test_get_personal_comments_success(auth_login_client, personal_comments_url, populate_comments):
@@ -384,3 +382,77 @@ def test_get_personal_comments_empty(auth_client, personal_comments_url):
 def test_unauthenticated_user_access(api_client, personal_comments_url):
     response = api_client.get(personal_comments_url(), secure=True, format='json')
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+@pytest.mark.django_db
+def test_follow_user_successfully(auth_login_client, populate_users, follow_url):
+    user1, user2, _ = populate_users
+    client = auth_login_client(user1.user.username, '1234')
+
+    response = client.post(follow_url(), {"user_id": user2.user.id} ,secure=True, format='json')
+    assert response.status_code == status.HTTP_201_CREATED
+
+@pytest.mark.django_db
+def test_follow_user_already_followed(auth_login_client, populate_users, follow_url):
+    user1, user2, _ = populate_users
+    client = auth_login_client(user1.user.username, '1234')
+
+    url = follow_url()
+    response = client.post(url, {"user_id": user2.user.id} ,secure=True, format='json')
+    assert response.status_code == status.HTTP_201_CREATED
+
+    response_2 = client.post(url, {"user_id": user2.user.id} ,secure=True, format='json')
+    assert response_2.status_code == status.HTTP_400_BAD_REQUEST
+
+@pytest.mark.django_db
+def test_user_cannot_follow_themselves(auth_login_client, populate_users, follow_url):
+    user1, _, _ = populate_users
+    client = auth_login_client(user1.user.username, '1234')
+
+    response = client.post(follow_url(), {"user_id": user1.user.id} ,secure=True, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+@pytest.mark.django_db
+def test_follow_user_not_found(auth_login_client, populate_users, follow_url):
+    user1, _, _ = populate_users
+    client = auth_login_client(user1.user.username, '1234')
+
+    # Pass non existing id
+    response = client.post(follow_url(), {"user_id": "20"} ,secure=True, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+@pytest.mark.django_db
+def test_unfollow_user_successfully(auth_login_client, populate_users, follow_url, unfollow_url):
+    user1, user2, _ = populate_users
+    client = auth_login_client(user1.user.username, '1234')
+
+    #Follow
+    response = client.post(follow_url(), {"user_id": user2.user.id} ,secure=True, format='json')
+    assert response.status_code == status.HTTP_201_CREATED
+
+    #Unfollow
+    unfollow_response = client.post(unfollow_url(), {"user_id": user2.user.id} ,secure=True, format='json')
+    assert unfollow_response.status_code == status.HTTP_200_OK
+
+@pytest.mark.django_db
+def test_unfollow_user_not_following(auth_login_client, populate_users, unfollow_url):
+    user1, user2, _ = populate_users
+    client = auth_login_client(user1.user.username, '1234')
+
+    unfollow_response = client.post(unfollow_url(), {"user_id": user2.user.id}, secure=True, format='json')
+    assert unfollow_response.status_code == status.HTTP_400_BAD_REQUEST
+
+@pytest.mark.django_db
+def test_user_cannot_unfollow_themselves(auth_login_client, populate_users, unfollow_url):
+    user1, _, _ = populate_users
+    client = auth_login_client(user1.user.username, '1234')
+
+    response = client.post(unfollow_url(), {"user_id": user1.user.id},secure=True, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+@pytest.mark.django_db
+def test_user_unfollow_not_following(auth_login_client, populate_users, unfollow_url):
+    user1, user2, _ = populate_users
+    client = auth_login_client(user1.user.username, '1234')
+
+    response = client.post(unfollow_url(), {"user_id": user2.user.id}, secure=True, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
