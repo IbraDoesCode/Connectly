@@ -2,7 +2,7 @@ import pytest
 from rest_framework import status
 from django.contrib.auth.models import User
 
-from apps.posts.models import Comment
+from apps.posts.models import Comment, CommentImage
 
 
 # Test Cases
@@ -20,8 +20,6 @@ def test_create_comment(auth_client, comment_list_url, populate_posts, mock_comm
     auth_client.post(comment_list_url(post4.id), mock_comment_data, secure=True, format='json')
     assert Comment.objects.count() == 2
 
-
-
 @pytest.mark.django_db
 def test_create_comment_invalid(auth_client, comment_list_url, populate_posts):
     post1, post2, post3, post4 = populate_posts
@@ -33,6 +31,72 @@ def test_create_comment_invalid(auth_client, comment_list_url, populate_posts):
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+# Comment Image Tests
+@pytest.mark.django_db
+def test_create_comment_with_image(auth_client, comment_list_url, populate_posts, mock_comment_with_image_data):
+    post1, _, _, _ = populate_posts
+    
+    response = auth_client.post(
+        comment_list_url(post1.id), 
+        mock_comment_with_image_data, 
+        secure=True, 
+        format='multipart'
+    )
+    
+    assert response.status_code == status.HTTP_201_CREATED
+    assert Comment.objects.count() == 1
+    assert CommentImage.objects.count() == 1
+    assert 'comment_image' in response.data
+    assert response.data['comment_image'] is not None
+
+@pytest.mark.django_db
+def test_create_comment_with_invalid_image(auth_client, comment_list_url, populate_posts, mock_comment_with_invalid_image):
+    post1, _, _, _ = populate_posts
+    
+    response = auth_client.post(
+        comment_list_url(post1.id), 
+        mock_comment_with_invalid_image, 
+        secure=True, 
+        format='multipart'
+    )
+    
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+@pytest.mark.django_db
+def test_create_image_comment_missing_image(auth_client, comment_list_url, populate_posts):
+    post1, _, _, _ = populate_posts
+    data = {
+        "content": "Test Comment",
+        "comment_type": "image"
+    }
+    
+    response = auth_client.post(comment_list_url(post1.id), data, secure=True, format='multipart')
+    
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Image comments must include an image" in str(response.data)
+
+@pytest.mark.django_db
+def test_media_cleanup_on_comment_deletion(auth_client, comment_list_url, comment_detail_url, mock_comment_with_image_data, populate_posts):
+    post1, _, _, _ = populate_posts
+    
+    # Create comment with image
+    response = auth_client.post(
+        comment_list_url(post1.id), 
+        mock_comment_with_image_data, 
+        secure=True, 
+        format='multipart'
+    )
+    comment_id = response.data['id']
+    
+    # Delete comment
+    delete_response = auth_client.delete(
+        comment_detail_url(post1.id, comment_id), 
+        secure=True
+    )
+    
+    assert delete_response.status_code == status.HTTP_204_NO_CONTENT
+    assert Comment.objects.count() == 0
+    assert CommentImage.objects.count() == 0  # Check if image was also deleted
 
 @pytest.mark.django_db
 def test_get_all_comments(auth_client, comment_list_url, populate_comments):
@@ -42,7 +106,6 @@ def test_get_all_comments(auth_client, comment_list_url, populate_comments):
     assert response.status_code == status.HTTP_200_OK
     assert Comment.objects.count() == 4
 
-
 @pytest.mark.django_db
 def test_get_single_comment(auth_client, comment_detail_url, populate_comments):
     comm1, comm2, comm3, comm4 = populate_comments
@@ -51,7 +114,6 @@ def test_get_single_comment(auth_client, comment_detail_url, populate_comments):
 
     assert response.status_code == status.HTTP_200_OK
     assert response.data['content'] == comm3.content
-
 
 @pytest.mark.django_db
 def test_update_comment(comment_detail_url, populate_comments, auth_login_client):
@@ -64,7 +126,6 @@ def test_update_comment(comment_detail_url, populate_comments, auth_login_client
     assert response.data['content'] != comm1.content
     assert response.data['content'] == "Updated comment"
 
-
 @pytest.mark.django_db
 def test_update_comment_not_author(comment_detail_url, populate_comments, auth_login_client):
     comm1, comm2, comm3, comm4 = populate_comments
@@ -74,7 +135,6 @@ def test_update_comment_not_author(comment_detail_url, populate_comments, auth_l
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert Comment.objects.get(id=comm4.id).content == comm4.content
-
 
 @pytest.mark.django_db
 def test_delete_comment(comment_detail_url, populate_comments, auth_login_client):
@@ -86,7 +146,6 @@ def test_delete_comment(comment_detail_url, populate_comments, auth_login_client
     assert response.status_code == status.HTTP_204_NO_CONTENT
     assert not Comment.objects.filter(id=comm4.id).exists()
 
-
 @pytest.mark.django_db
 def test_cascade_delete_post_comment(post_detail_url, populate_comments, auth_login_client):
     comm1, comm2, comm3, comm4 = populate_comments
@@ -97,7 +156,6 @@ def test_cascade_delete_post_comment(post_detail_url, populate_comments, auth_lo
     assert response.status_code == status.HTTP_204_NO_CONTENT
     assert not Comment.objects.filter(id=comm4.id).exists()
 
-
 @pytest.mark.django_db
 def test_delete_comment_not_author(comment_detail_url, populate_comments, auth_login_client):
     comm1, comm2, comm3, comm4 = populate_comments
@@ -107,7 +165,6 @@ def test_delete_comment_not_author(comment_detail_url, populate_comments, auth_l
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert Comment.objects.filter(id=comm3.id).exists()
-    
     
 @pytest.mark.django_db
 def test_like_comment(auth_client, like_comment_url, populate_posts, populate_comments):
