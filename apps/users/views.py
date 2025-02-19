@@ -5,9 +5,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 from django.db.models import Q, Value
 from django.db.models.functions import Concat
-from apps.posts.models import Comment
+from apps.posts.models import Comment, Post
 from apps.posts.permissions import IsAuthor
-from apps.posts.serializers import CommentSerializer
+from apps.posts.serializers import CommentSerializer, PostSerializer
 from utils.logger import Logger
 from utils.response_factory import ResponseFactory
 from .factories import UserFactory
@@ -311,6 +311,24 @@ class PersonalCommentsView(APIView):
             serializer.data,
             serializer.data
         )
+    
+class PersonalPostsView(APIView):
+    permission_classes = [IsAuthenticated, IsAuthor]
+
+    def get(self, request):
+        posts = Post.objects.filter(author=request.user)
+
+        if not posts.exists():
+            return ResponseFactory.not_found(
+                'No posts found',
+                {'Message': 'No posts found'}
+            )
+
+        serializer = PostSerializer(posts, many=True)
+        return ResponseFactory.success(
+            serializer.data,
+            serializer.data
+        )        
 
 class FollowView(APIView):
     permission_classes = [IsAuthenticated]
