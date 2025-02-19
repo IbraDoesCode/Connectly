@@ -138,9 +138,27 @@ def like_comment_url():
     return _generate_url
 
 @pytest.fixture
+def personal_posts_url():
+    def _generate_url():
+        return reverse('personal-posts')
+    return _generate_url
+
+@pytest.fixture
 def personal_comments_url():
     def _generate_url():
         return reverse('personal-comments')
+    return _generate_url
+
+@pytest.fixture
+def follow_url():
+    def _generate_url():
+        return reverse('follow')
+    return _generate_url
+
+@pytest.fixture
+def unfollow_url():
+    def _generate_url():
+        return reverse('unfollow')
     return _generate_url
 
 # Mock Data Fixtures

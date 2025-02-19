@@ -3,7 +3,7 @@ from rest_framework import serializers
 from rest_framework.serializers import ValidationError
 
 from .factories import UserFactory
-from .models import Profile
+from .models import Profile, Follow
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -102,3 +102,53 @@ class ProfileSearchSerializer(serializers.ModelSerializer):
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}"
+
+class FollowSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = Follow
+        fields = ['user_id', 'created_at']
+
+    def validate_user_id(self, value):
+        try:
+            user_to_follow = User.objects.get(id=value)
+        except User.DoesNotExist:
+            raise ValidationError("User to follow does not exist.")
+        
+        if self.context['request'].user == user_to_follow:
+            raise ValidationError("You cannot follow yourself.")
+        
+        return user_to_follow
+
+    def validate(self, data):
+        user_to_follow = data['user_id']
+        follower = self.context['request'].user
+
+        # Check if the user is already being followed
+        if Follow.objects.filter(follower=follower, followed=user_to_follow).exists():
+            raise ValidationError("You are already following this user.")
+        
+        data['followed'] = user_to_follow
+        data['follower'] = follower
+        return data
+
+    def create(self, validated_data):
+        validated_data.pop('user_id')
+        follow_instance = Follow.objects.create(**validated_data)
+        return follow_instance
+
+    
+class UnfollowSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+
+    def validate_user_id(self, value):
+        try:
+            user_to_unfollow = User.objects.get(id=value)
+        except User.DoesNotExist:
+            raise ValidationError("User to unfollow does not exist.")
+        
+        if self.context['request'].user == user_to_unfollow:
+            raise ValidationError("You cannot unfollow yourself.")
+        
+        return value
