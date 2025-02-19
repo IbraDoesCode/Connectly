@@ -358,7 +358,21 @@ def test_get_profile_by_invalid_id(auth_client):
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert 'detail' in response.data
     assert response.data['detail'] == 'Profile not found.'
-    
+
+@pytest.mark.django_db
+def test_get_personal_posts_success(auth_login_client, personal_posts_url, populate_posts):
+    post1, _, _, _ = populate_posts
+    client = auth_login_client(post1.author.username, '1234')
+    response = client.get(personal_posts_url(), secure=True, format='json')
+    assert response.status_code == status.HTTP_200_OK    
+    assert isinstance(response.data, list)
+    assert len(response.data) > 0
+
+@pytest.mark.django_db
+def test_get_personal_posts_empty(auth_client, personal_posts_url):
+    response = auth_client.get(personal_posts_url(), secure=True, format='json')
+    assert response.status_code == status.HTTP_404_NOT_FOUND    
+    assert response.data['Message'] == 'No posts found'  
 
 @pytest.mark.django_db
 def test_get_personal_comments_success(auth_login_client, personal_comments_url, populate_comments):
