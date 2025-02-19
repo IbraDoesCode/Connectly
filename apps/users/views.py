@@ -13,12 +13,9 @@ from utils.response_factory import ResponseFactory
 from .factories import UserFactory
 from .models import Profile, Follow
 from .permissions import IsAdmin, IsOwnerOrAdmin
-from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer, UserUpdateSerializer
+from .serializers import ProfileSearchSerializer, ProfileSerializer, UserSerializer, RoleSerializer, UserUpdateSerializer
 from rest_framework.generics import ListAPIView
 from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer, FollowSerializer, UnfollowSerializer
-
-
-logger = Logger().get_logger()
 
 class UserListView(ListAPIView):
     permission_classes = [IsAuthenticated, IsAdmin]

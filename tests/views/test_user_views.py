@@ -220,7 +220,7 @@ def test_change_user_role(api_client, admin_auth_client, get_all_users_url, chan
     assert response1.status_code == status.HTTP_403_FORBIDDEN
 
 @pytest.mark.django_db
-def test_profile_update_bio(auth_client, populate_users):
+def test_profile_update_bio(auth_client, populate_users, update_user_url):
     user1, _, _ = populate_users
     search_url = reverse('user-profile')
     response = auth_client.patch(
@@ -246,7 +246,6 @@ def test_profile_update_firstname_only(auth_client, populate_users):
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.data['non_field_errors'][0] == "Both 'first_name' and 'last_name' are required when updating either."
-
 
 @pytest.mark.django_db
 def test_delete_user_profile(admin_auth_client, get_all_users_url, mock_user_data):
