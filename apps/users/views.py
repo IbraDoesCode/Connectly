@@ -15,7 +15,7 @@ from .models import Profile, Follow
 from .permissions import IsAdmin, IsOwnerOrAdmin
 from .serializers import ProfileSearchSerializer, ProfileSerializer, UserSerializer, RoleSerializer, UserUpdateSerializer
 from rest_framework.generics import ListAPIView
-from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer, FollowSerializer, UnfollowSerializer
+from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer, FollowSerializer # UnfollowSerializer
 
 class UserListView(ListAPIView):
     permission_classes = [IsAuthenticated, IsAdmin]
@@ -337,24 +337,11 @@ class FollowView(APIView):
         serializer = FollowSerializer(data=request.data, context={'request': request})
         
         if serializer.is_valid():
-            serializer.save()
-            return ResponseFactory.created("Followed Successfully", {"Message": "Followed successfully"})
-        return ResponseFactory.bad_request("Error", {"Error": serializer.errors})
-    
-class UnfollowView(APIView):
-    permission_classes = [IsAuthenticated]
+            result = serializer.save()
 
-    def post(self, request):
-        serializer = UnfollowSerializer(data=request.data, context={'request': request})
+            if isinstance(result, dict):
+                return ResponseFactory.success('Unfollowed Successfully', {'Message': 'Unfollowed successfully'})
+
+            return ResponseFactory.created("Followed Successfully", {"Message": "Followed successfully"})
         
-        if serializer.is_valid():
-            user_id = serializer.validated_data['user_id']
-            user_to_unfollow = User.objects.get(id=user_id)
-            follow_instance = Follow.objects.filter(follower=request.user, followed=user_to_unfollow)
-            
-            if follow_instance.exists():
-                follow_instance.delete()
-                return ResponseFactory.success("User unfollowed successfully", {"Message": "User unfollowed successfully."})
-            return ResponseFactory.bad_request("Not following", {"Message": "You are not following this user."})
         return ResponseFactory.bad_request("Error", {"Error": serializer.errors})
-    

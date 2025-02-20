@@ -155,12 +155,6 @@ def follow_url():
         return reverse('follow')
     return _generate_url
 
-@pytest.fixture
-def unfollow_url():
-    def _generate_url():
-        return reverse('unfollow')
-    return _generate_url
-
 # Mock Data Fixtures
 @pytest.fixture
 def mock_user_data():
