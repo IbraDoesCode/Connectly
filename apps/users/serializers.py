@@ -125,30 +125,20 @@ class FollowSerializer(serializers.ModelSerializer):
         user_to_follow = data['user_id']
         follower = self.context['request'].user
 
-        # Check if the user is already being followed
-        if Follow.objects.filter(follower=follower, followed=user_to_follow).exists():
-            raise ValidationError("You are already following this user.")
-        
-        data['followed'] = user_to_follow
-        data['follower'] = follower
+        # Check if a follow record exists
+        follow_instance = Follow.objects.filter(follower=follower, followed=user_to_follow).first()
+
+        if follow_instance:
+            data['to_unfollow'] = follow_instance
+        else:
+            data['followed'] = user_to_follow
+            data['follower'] = follower
         return data
 
     def create(self, validated_data):
+        if 'to_unfollow' in validated_data:
+            validated_data['to_unfollow'].delete()
+            return {'Unfollowed': True}
+
         validated_data.pop('user_id')
-        follow_instance = Follow.objects.create(**validated_data)
-        return follow_instance
-
-    
-class UnfollowSerializer(serializers.Serializer):
-    user_id = serializers.IntegerField()
-
-    def validate_user_id(self, value):
-        try:
-            user_to_unfollow = User.objects.get(id=value)
-        except User.DoesNotExist:
-            raise ValidationError("User to unfollow does not exist.")
-        
-        if self.context['request'].user == user_to_unfollow:
-            raise ValidationError("You cannot unfollow yourself.")
-        
-        return value
+        return Follow.objects.create(**validated_data)
