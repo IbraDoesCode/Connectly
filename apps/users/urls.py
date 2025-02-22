@@ -12,5 +12,4 @@ urlpatterns = [
     path('profile/posts/', PersonalPostsView.as_view(), name='personal-posts'),
     path('profile/comments/', PersonalCommentsView.as_view(), name='personal-comments'),
     path('follow/', FollowView.as_view(), name='follow'),
-    path('unfollow/', UnfollowView.as_view(), name='unfollow'),
 ]
