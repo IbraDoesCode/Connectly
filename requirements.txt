@@ -11,3 +11,5 @@ pytest
 pytest-django
 Pillow
 ffmpeg-python
+django-allauth
+python-dotenv
