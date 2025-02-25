@@ -13,3 +13,6 @@ tests_report.html
 tests_report.pdf
 /.vscode
 /media
+
+# Ignore environment file
+.env
