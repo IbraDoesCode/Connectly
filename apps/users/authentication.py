@@ -31,7 +31,7 @@ class GoogleAuthentication(BaseAuthentication):
             )
 
             if response.status_code != 200:
-                raise AuthenticationFailed("Invalid Google token.")
+                raise AuthenticationFailed("Invalid token.")
 
             user_data = response.json()
             email = user_data.get("email")
