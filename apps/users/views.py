@@ -229,6 +229,13 @@ class ProfileView(APIView):
         try:
             user = Profile.objects.get(user=request.user)
             serializer = ProfileSerializer(user, data=request.data, partial=True)
+            
+            # Check if request body is empty
+            if not request.data:
+                return ResponseFactory.bad_request(
+                    "No changes were provided.",
+                    {"detail": "Request body is empty. Provide at least one field to update."}
+                )
 
             if not serializer.is_valid():
                 return ResponseFactory.bad_request(
