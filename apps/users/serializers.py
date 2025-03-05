@@ -7,6 +7,7 @@ from .models import Profile, Follow
 
 
 class UserSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
     password = serializers.CharField(write_only=True)
@@ -16,8 +17,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'bio', 'full_name']
-        read_only_fields = ['full_name']
+        fields = ['id', 'username', 'email', 'password', 'first_name', 'last_name', 'bio', 'full_name']
+        read_only_fields = ['id', 'full_name']
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}"
