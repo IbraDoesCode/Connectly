@@ -229,11 +229,25 @@ class ProfileView(APIView):
         try:
             user = Profile.objects.get(user=request.user)
             serializer = ProfileSerializer(user, data=request.data, partial=True)
+            
+            # Check if request body is empty
+            if not request.data:
+                return ResponseFactory.bad_request(
+                    "No changes were provided.",
+                    {"detail": "Request body is empty. Provide at least one field to update."}
+                )
 
             if not serializer.is_valid():
                 return ResponseFactory.bad_request(
                     "Error while updating the profile",
                     serializer.errors
+                )
+                
+            # Check if provided data is identical to current user data
+            if all(getattr(user, field) == value for field, value in request.data.items()):
+                return ResponseFactory.bad_request(
+                    "No changes detected.",
+                    {"detail": "Provided values are the same as the current user data."}
                 )
 
             serializer.save()
@@ -288,7 +302,7 @@ class ProfileByIDView(APIView):
                 "Profile deleted successfully",
                 {'Message': 'Profile deleted successfully'}
             )
-        except Profile.DoesNotExist:
+        except User.DoesNotExist:
             return ResponseFactory.not_found(
                 "Profile not found",
                 {'Message': 'Profile not found.'}
