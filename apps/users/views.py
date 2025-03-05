@@ -242,6 +242,13 @@ class ProfileView(APIView):
                     "Error while updating the profile",
                     serializer.errors
                 )
+                
+            # Check if provided data is identical to current user data
+            if all(getattr(user, field) == value for field, value in request.data.items()):
+                return ResponseFactory.bad_request(
+                    "No changes detected.",
+                    {"detail": "Provided values are the same as the current user data."}
+                )
 
             serializer.save()
             return ResponseFactory.success(
