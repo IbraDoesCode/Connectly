@@ -288,7 +288,7 @@ class ProfileByIDView(APIView):
                 "Profile deleted successfully",
                 {'Message': 'Profile deleted successfully'}
             )
-        except Profile.DoesNotExist:
+        except User.DoesNotExist:
             return ResponseFactory.not_found(
                 "Profile not found",
                 {'Message': 'Profile not found.'}
