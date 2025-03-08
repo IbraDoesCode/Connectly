@@ -2,7 +2,7 @@ import pytest
 import io
 from rest_framework import status
 from django.contrib.auth.models import User
-from apps.posts.models import Post, PostImage, PostVideo
+from apps.posts.models import Post, Media
 from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
 
@@ -26,7 +26,7 @@ def test_create_post_with_image(auth_client, post_list_url, mock_post_with_image
     
     assert response.status_code == status.HTTP_201_CREATED
     assert Post.objects.count() == 1
-    assert PostImage.objects.count() == 1
+    assert Media.objects.count() == 1
     assert 'post_images' in response.data
     assert len(response.data['post_images']) == 1
 
@@ -59,7 +59,7 @@ def test_create_post_with_video(auth_client, post_list_url, mock_post_with_video
         
     assert response.status_code == status.HTTP_201_CREATED
     assert Post.objects.count() == 1
-    assert PostVideo.objects.count() == 1
+    assert Media.objects.count() == 1
     assert 'post_videos' in response.data
     assert len(response.data['post_videos']) == 1
 
@@ -245,7 +245,7 @@ def test_create_post_with_multiple_images(auth_client, post_list_url):
     
     assert response.status_code == status.HTTP_201_CREATED
     assert Post.objects.count() == 1
-    assert PostImage.objects.count() == 2
+    assert Media.objects.count() == 2
     assert len(response.data['post_images']) == 2
 
 # Cleanup Test
@@ -260,4 +260,4 @@ def test_media_cleanup_on_post_deletion(auth_client, post_list_url, post_detail_
     
     assert delete_response.status_code == status.HTTP_204_NO_CONTENT
     assert Post.objects.count() == 0
-    assert PostImage.objects.count() == 0  # Check if image was also deleted
+    assert Media.objects.count() == 0  # Check if image was also deleted

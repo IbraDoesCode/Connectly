@@ -18,7 +18,7 @@ class PostListView(ListAPIView):
         posts = self.paginate_queryset(Post.objects.all()) # Apply pagination
         
         # Serialize the paginated queryset
-        serializer = PostSerializer(posts, many=True)
+        serializer = PostSerializer(posts, many=True, context={'request': request})
         
         # Return the paginated response (with pagination metadata like 'next', 'previous')
         return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
@@ -26,7 +26,7 @@ class PostListView(ListAPIView):
 
     def post(self, request):
         # Take the data from the request and convert it to JSON
-        serializer = PostSerializer(data=request.data)
+        serializer = PostSerializer(data=request.data, context={'request': request})
 
         # Check if the data is valid
         if not serializer.is_valid():
@@ -57,7 +57,7 @@ class PostDetailView(APIView):
             post = Post.objects.get(id=post_id)
 
             # Serialize the post object
-            serializer = PostSerializer(post)
+            serializer = PostSerializer(post, context={'request': request})
 
             # Return the serialized JSON to http response
             return ResponseFactory.success(
@@ -80,7 +80,7 @@ class PostDetailView(APIView):
             self.check_object_permissions(request, post)
 
             # Update the post using the serializer
-            serializer = PostSerializer(post, data=request.data, partial=True)
+            serializer = PostSerializer(post, data=request.data, partial=True, context={'request': request})
 
             # Check if the serializer is valid, raise exception if the request data contains invalid field
             if not serializer.is_valid():
@@ -338,6 +338,8 @@ class LikePostView(APIView):
         return ResponseFactory.deleted('Post unliked', 
                                        {'message': 'Post unliked',
                                         'like_count': like_count})
+
+
 class LikeCommentView(APIView):
     permission_classes = [IsAuthenticated]
 

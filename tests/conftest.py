@@ -4,7 +4,8 @@ from django.test import override_settings
 from django.conf import settings
 import pytest
 from django.contrib.auth.models import User
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
+from django.utils.http import urlencode
 from rest_framework.test import APIClient
 
 from apps.posts.factories import PostFactory, CommentFactory
@@ -151,8 +152,12 @@ def personal_comments_url():
 
 @pytest.fixture
 def follow_url():
-    def _generate_url():
-        return reverse('follow')
+    def _generate_url(user_id, query_kwargs=None):
+        url = reverse('profiles:user-follow', kwargs={'user_id': user_id})
+        if query_kwargs:
+            print(f'{url}?{urlencode(query_kwargs)}')
+            return f'{url}?{urlencode(query_kwargs)}'
+        return url
     return _generate_url
 
 # Mock Data Fixtures
