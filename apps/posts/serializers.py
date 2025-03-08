@@ -1,321 +1,183 @@
-import io
-import os
-import shutil
-import tempfile
-from django.core.exceptions import ValidationError
 
-from django.core.files.base import ContentFile
+from django.contrib.contenttypes.models import ContentType
 
 from rest_framework import serializers
-from PIL import Image
-from rest_framework import serializers
 
-from utils.media_compressor import MediaCompressor
-from .models import CommentImage, Post, PostImage, PostVideo
-from .factories import PostFactory, CommentFactory
 from .models import Post, Comment
-import ffmpeg
+
+from ..medias.models import Media
+from ..medias.serializers import MediaSerializer
+
+
 
 class CommentSerializer(serializers.ModelSerializer):
     author = serializers.ReadOnlyField(source='author.username')
     post = serializers.ReadOnlyField(source='post.id')
-    # Add image field for upload (single image)
-    image = serializers.ImageField(required=False)
-    # For retrieving image url
-    comment_image = serializers.SerializerMethodField()
+    media_files = serializers.FileField(write_only=True, required=False)
+    media = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+    like_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
-        fields = ['id', 'post', 'author', 'content', 'comment_type', 'created_at', 'image', 'comment_image']
-        # extra_kwargs = {'post': {'read_only': True}, 'author': {'read_only': True}}
+        fields = ['id', 'post', 'content', 'comment_type', 'author', 'created_at', 'media', 'media_files', 'is_liked', 'like_count']
 
-    def get_comment_image(self, obj):
-        """Return the image data if it exists"""
-        comment_image = obj.images.first() 
-        if comment_image:
-            return {
-                "id": comment_image.id,
-                "url": comment_image.image.url,
-                "metadata": comment_image.metadata
-            }
-        return None
-    
-    def validate(self, data):
-        """Validate comment data including image if present"""
-        comment_type = data.get('comment_type')
-        image = data.get('image')
+    def get_media(self, obj):
+        media_queryset = Media.objects.filter(
+            content_type=ContentType.objects.get_for_model(obj),
+            object_id=obj.id
+        )
+        request = self.context.get('request')
+        return MediaSerializer(media_queryset, context={'request': request}).data
 
-        if comment_type == 'image' and not image:
-            raise serializers.ValidationError("Image comments must include an image.")
-        
+    def get_is_liked(self, obj):
+        user = self.context.get('request').user
+        return obj.liked_by.filter(id=user.id).exists()
+
+    def get_like_count(self, obj):
+        return obj.liked_by.count()
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        if instance.comment_type == 'text':
+            data.pop('media', None)
+
         return data
-        
-    # def to_representation(self, instance):
-    #     response = super().to_representation(instance)
-    #     response['author'] = instance.author.username if instance.author else None
-    #     return response
+
+    def validate(self, data):
+        comment_type = data.get('comment_type')
+        content = data.get('content', '').strip()
+        media_files = data.get('media_files', [])
+
+        # Validate for empty content if the post type is text
+        if comment_type == 'text' and not content:
+            raise serializers.ValidationError("Text content cannot be empty.")
+
+        if comment_type == 'image' and not media_files:
+            raise serializers.ValidationError("An image is required.")
+
+        if comment_type == 'video':
+            raise serializers.ValidationError("Videos are not allowed in comments.")
+
+        return data
 
     def create(self, validated_data):
-        # Extract image data if it exists
-        image = validated_data.pop('image', None)
-        comment = None
+        comment_type = validated_data.get('comment_type')
+        media_file = validated_data.pop('media_files', [])
+        comment = super().create(validated_data)
 
-        try:
-            comment = CommentFactory.create_comment(**validated_data)
+        if media_file:
+            media_data = {
+                'file': media_file,
+                'media_type': comment_type,
+                'content_type': ContentType.objects.get_for_model(comment).id,
+                'object_id': comment.id
+            }
+            media_serializer = MediaSerializer(
+                data=media_data
+            )
+            if media_serializer.is_valid():
+                media_serializer.save()
+            else:
+                raise serializers.ValidationError(media_serializer.errors)
 
-            # Process image if it exists
-            if image:
-                try:
-                    # Compress the image with higher compression for comments
-                    compressed_image = MediaCompressor.compress_image(
-                        image,
-                        quality=60,  # Higher compression (lower quality) for comments
-                        max_width=800,  # Smaller max dimensions for comments
-                        max_height=800
-                    )
-                    
-                    # Extract image metadata
-                    metadata = MediaCompressor.extract_image_metadata(compressed_image)
-
-                    # Create the CommentImage instance
-                    comment_image = CommentImage.objects.create(
-                        comment=comment,
-                        image=compressed_image,
-                        metadata=metadata
-                    )
-                    
-                    # Update the filename with metadata
-                    ext = os.path.splitext(compressed_image.name)[1]
-                    new_name = f"comment_{comment.id}_{comment_image.id}_{metadata['width']}x{metadata['height']}_{metadata['file_size']//1024}kb{ext}"
-                    compressed_image.name = new_name
-                    comment_image.image.save(new_name, compressed_image, save=True)
-                    
-                except Exception as img_exception:
-                    raise serializers.ValidationError(f"Error processing comment image: {str(img_exception)}")
-
-            return comment
-
-        except Exception as e:
-            if comment:
-                comment.delete()
-            raise serializers.ValidationError(f"Error creating comment: {str(e)}")
+        return comment
 
     def update(self, instance, validated_data):
         # Prevent changing post and author
         if instance.post != validated_data.get('post', instance.post):
             raise serializers.ValidationError("You cannot change the post of a comment.")
-        
+
         if instance.author != validated_data.get('author', instance.author):
             raise serializers.ValidationError("You cannot change the author of a comment.")
-        
+
         # Remove image from validated_data if present (images cannot be updated)
-        validated_data.pop('image', None)
-        
+        validated_data.pop('media', None)
+
         return super().update(instance, validated_data)
+
 
 
 class PostSerializer(serializers.ModelSerializer):
     author = serializers.ReadOnlyField(source='author.username')
     comments = CommentSerializer(many=True, read_only=True)
-    # For uploads
-    images = serializers.ListField(
-        child=serializers.ImageField(), write_only=True, required=False
-    )
-    videos = serializers.ListField(
+    media_files = serializers.ListField(
         child=serializers.FileField(), write_only=True, required=False
     )
-    # For retrieving media urls
-    post_images = serializers.SerializerMethodField()
-    post_videos = serializers.SerializerMethodField()
+    media = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+    like_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ['id', 'content', 'post_type', 'author', 'comments', 'created_at', 'images', 'videos', 'post_images', 'post_videos']
+        fields = ['id', 'content', 'post_type', 'author', 'comments', 'created_at', 'media', 'media_files', 'is_liked', 'like_count']
 
-    def get_post_images(self, obj):
-        return [{"id": image.id, "url": image.image.url, "metadata": image.metadata} for image in obj.images.all()]
+    def get_media(self, obj):
+        media_queryset = Media.objects.filter(
+            content_type=ContentType.objects.get_for_model(obj),
+            object_id=obj.id
+        )
+        request = self.context.get('request')
+        return MediaSerializer(media_queryset, many=True, context={'request': request}).data
 
-    def get_post_videos(self, obj):
-        return [{"id": video.id, "url": video.video.url, "metadata": video.metadata} for video in obj.videos.all()]
-    
-    def validate_content(self, value):
-        if not value.strip():
-            raise serializers.ValidationError("Post cannot be empty")
-        return value
-    
-    def validate_video(file):
-        # Check if the file's MIME type starts with 'video/'
+    def get_is_liked(self, obj):
+        user = self.context.get('request').user
+        return obj.liked_by.filter(id=user.id).exists()
 
-        valid_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm']
-        if not file:
-            raise ValidationError("No file was uploaded.")
-        if not file.name:
-            raise ValidationError("The uploaded file has no name.")
-        ext = os.path.splitext(file.name)[1]
-        if ext.lower() not in valid_extensions:
-            raise ValidationError(f"This is not a valid video file. Please upload a video with one of the following extensions: {', '.join(valid_extensions)}.")
-        if not file.content_type.startswith('video/'):
-            raise ValidationError("This is not a valid video file. Please upload a video with a valid MIME type.")
+    def get_like_count(self, obj):
+        return obj.liked_by.count()
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        if instance.post_type == 'text':
+            data.pop('media', None)
+
+        return data
 
     def validate(self, data):
         post_type = data.get('post_type')
-        images = data.get('images', [])
-        videos = data.get('videos', [])
+        content = data.get('content', '').strip()
+        media_files = data.get('media_files', [])
 
-        if post_type == 'image' and not images:
-            raise serializers.ValidationError("Image posts must include at least one image.")
-        if post_type == 'video' and not videos:
-            raise serializers.ValidationError("Video posts must include at least one video.")
+        # Validate for empty content if the post type is text
+        if post_type == 'text' and not content:
+            raise serializers.ValidationError("Text content cannot be empty.")
+
+        if post_type in ['image', 'video'] and not media_files:
+            raise serializers.ValidationError("At least one media file is required.")
 
         return data
-    
+
     def create(self, validated_data):
-        images = validated_data.pop('images', [])
-        videos = validated_data.pop('videos', [])
-        post = None
+        post_type = validated_data.get('post_type')
+        media_files = validated_data.pop('media_files', [])
+        post = super().create(validated_data)
 
-        try:
-            post = PostFactory.create_post(**validated_data)
-
-            # Compress and save images
-            for image in images:
-                try:
-                    # Compress the image
-                    compressed_image  = MediaCompressor.compress_image(image)
-                    
-                    # Extract image metadata from the compressed image file
-                    metadata = MediaCompressor.extract_image_metadata(compressed_image)
-
-                    # Create the PostImage instance
-                    post_image = PostImage.objects.create(
-                        post=post,
-                        image=compressed_image,
-                        metadata=metadata
-                    )
-                    
-                    # Update the filename with metadata
-                    ext = os.path.splitext(compressed_image.name)[1]
-                    new_name = f"{post.id}_{post_image.id}_{metadata['width']}x{metadata['height']}_{metadata['file_size']//1024}kb{ext}"
-                    compressed_image.name = new_name
-                    post_image.image.save(new_name, compressed_image, save=True)
-                    
-                except Exception as img_exception:
-                    raise serializers.ValidationError(f"Error processing image: {str(img_exception)}")
-
-            # Compress and save videos
-            for video in videos:
-                try:
-                    # Compress the video
-                    compressed_video = MediaCompressor.compress_video(video)
-                    
-                    # Extract video metadata
-                    metadata = MediaCompressor.extract_video_metadata(compressed_video)
-                    
-                    # Create the PostVideo instance
-                    post_video = PostVideo.objects.create(
-                        post=post,
-                        video=compressed_video,
-                        metadata=metadata
-                    )
-                    # Update the filename with metadata
-                    ext = os.path.splitext(compressed_video.name)[1]
-                    new_name = f"{post.id}_{post_video.id}_{metadata['width']}x{metadata['height']}_{metadata['duration']}s_{metadata['file_size']//1024//1024}mb{ext}"
-                    compressed_video.name = new_name
-                    post_video.video.save(new_name, compressed_video, save=True)
-                except Exception as vid_exception:
-                    print(f"Video processing error: {str(vid_exception)}")
-                    raise serializers.ValidationError(f"Error processing video: {str(vid_exception)}")
-                
-                # Validate the post
-                post_type = validated_data.get('post_type')
-                if post_type == 'image' and not images:
-                    raise serializers.ValidationError("Image posts must include at least one image.")
-                if post_type == 'video' and not videos:
-                    raise serializers.ValidationError("Video posts must include at least one video.")
-        except Exception as e:
-            if post:
-                post.delete()
-            raise serializers.ValidationError(f"Error creating post: {str(e)}")
-        return post
-    
-    @staticmethod
-    def extract_image_metadata(image_file):
-        """Helper function to extract image metadata."""
-        try:
-            if isinstance(image_file, ContentFile):
-                image = Image.open(io.BytesIO(image_file.read()))
-                file_size = image_file.size
-            else:
-                image = Image.open(image_file)
-                file_size = getattr(image_file, 'size', 0)
-                
-            width, height = image.size
-            file_type = image.format if image.format is not None else None
-            
-            return {
-                'width': width,
-                'height': height,
-                'file_size': file_size,
-                'file_type': file_type
+        for file in media_files:
+            media_data = {
+                'file': file,
+                'media_type': post_type,
+                'content_type': ContentType.objects.get_for_model(post).id,
+                'object_id': post.id
             }
-        except Exception as e:
-            raise ValidationError(f"Error extracting image metadata: {str(e)}")
+            media_serializer = MediaSerializer(
+                data=media_data
+            )
+            if media_serializer.is_valid():
+                media_serializer.save()
+            else:
+                raise serializers.ValidationError(media_serializer.errors)
 
-    @staticmethod
-    def extract_video_metadata(video_file):
-        """Helper function to extract video metadata."""
-        try:
-            # Create a temporary file to analyze with ffmpeg
-            with tempfile.NamedTemporaryFile(suffix=os.path.splitext(video_file.name)[1], delete=False) as temp_file:
-                if isinstance(video_file, ContentFile):
-                    temp_file.write(video_file.read())
-                    video_file.seek(0)  # Reset the file pointer
-                else:
-                    shutil.copyfileobj(video_file, temp_file)
-                
-                temp_file_path = temp_file.name
-    
-            try:
-                # Probe the temporary file
-                probe = ffmpeg.probe(temp_file_path, v='error', select_streams='v:0', show_entries='stream=width,height,duration')
-                stream_info = probe.get('streams', [{}])[0]
-                
-                metadata = {
-                    'width': int(stream_info.get('width', 0)),
-                    'height': int(stream_info.get('height', 0)),
-                    'duration': float(stream_info.get('duration', 0)),
-                    'file_size': video_file.size if hasattr(video_file, 'size') else os.path.getsize(temp_file_path),
-                }
-    
-                return metadata
-    
-            finally:
-                # Clean up the temporary file
-                os.unlink(temp_file_path)
-    
-        except Exception as e:
-            raise ValidationError(f"Error extracting video metadata: {str(e)}")
+        return post
 
+    def update(self, instance, validated_data):
+        # Prevent changing author
+        if instance.author != validated_data.get('author', instance.author):
+            raise serializers.ValidationError("You cannot change the author of a post.")
 
+        # Remove media from validated_data if present (media cannot be updated)
+        validated_data.pop('media', None)
 
-    # # Override the serialization method to change the author field from a primary key to a username string
-    # def to_representation(self, instance):
-    #     response = super().to_representation(instance)
-    #     response['author'] = instance.author.username #UserSerializer(instance.author).data
-    #     return response
-
-
-    # Override the update method to add validation for allowable fields
-    # def update(self, instance, validated_data):
-    #     allowed_fields = ['content']
-    #     for field in validated_data.keys():
-    #         if field not in allowed_fields:
-    #             raise ValidationError(f"Field {field} is not allowed")
-    #
-    #     for field, value in validated_data.items():
-    #         if field in allowed_fields:
-    #             setattr(instance, field, value)
-    #
-    #     instance.save()
-    #     return instance
-
+        return super().update(instance, validated_data)
