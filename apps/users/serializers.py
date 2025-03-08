@@ -104,6 +104,31 @@ class ProfileSearchSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}"
 
+
+class FollowListSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source="follower.id", read_only=True)
+    username = serializers.CharField(source="follower.username", read_only=True)
+    first_name = serializers.CharField(source="follower.profile.first_name", read_only=True)
+    last_name = serializers.CharField(source="follower.profile.last_name", read_only=True)
+
+    class Meta:
+        model = Follow
+        fields = ['id', 'username', 'first_name', 'last_name']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        query_type = request.query_params.get("type", None)
+
+        if query_type == "following":
+            data["id"] = instance.followed.id
+            data["username"] = instance.followed.username
+            data["first_name"] = instance.followed.profile.first_name
+            data["last_name"] = instance.followed.profile.last_name
+
+        return data
+
+
 class FollowSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(write_only=True)
 

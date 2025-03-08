@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'apps.posts',
     'apps.users',
+    'apps.medias',
     'connectly'
 ]
 
