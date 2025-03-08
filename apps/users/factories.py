@@ -32,7 +32,20 @@ class UserFactory:
             password=password
         )
         return Profile.objects.create(user=user, first_name=first_name, last_name=last_name, bio=bio)
-        
+    
+    @staticmethod
+    def create_profile_for_existing_user(user):
+        """
+        Creates a Profile for an already existing User (Google OAuth users).
+        """
+        if Profile.objects.filter(user=user).exists():
+            return Profile.objects.get(user=user)  # Return existing profile if already created
+
+        # Ensure first_name and last_name are set
+        first_name = user.first_name if user.first_name else ""
+        last_name = user.last_name if user.last_name else ""
+
+        return Profile.objects.create(user=user, first_name=first_name, last_name=last_name, bio="")
 
     @staticmethod
     def assign_user_role(user, role):
