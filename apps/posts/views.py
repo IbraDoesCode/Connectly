@@ -1,16 +1,14 @@
 # Create your views here.
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from rest_framework.pagination import PageNumberPagination
-
 from utils.response_factory import ResponseFactory
 from .models import Post, Comment
-from .permissions import IsAuthor
+from .permissions import IsAuthor, IsOwnerOrReadOnly
 from .serializers import PostSerializer, CommentSerializer
 from rest_framework.generics import ListAPIView
 
 
-# Post List View (GET all posts)
+# Post List View (GET all posts, POST new post)
 class PostListView(ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PostSerializer
@@ -20,7 +18,7 @@ class PostListView(ListAPIView):
         posts = self.paginate_queryset(Post.objects.all()) # Apply pagination
         
         # Serialize the paginated queryset
-        serializer = PostSerializer(posts, many=True)
+        serializer = PostSerializer(posts, many=True, context={'request': request})
         
         # Return the paginated response (with pagination metadata like 'next', 'previous')
         return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
@@ -28,7 +26,7 @@ class PostListView(ListAPIView):
 
     def post(self, request):
         # Take the data from the request and convert it to JSON
-        serializer = PostSerializer(data=request.data)
+        serializer = PostSerializer(data=request.data, context={'request': request})
 
         # Check if the data is valid
         if not serializer.is_valid():
@@ -47,17 +45,11 @@ class PostListView(ListAPIView):
             serializer.data
         )
 
-
 # Post Detail View (GET, PUT, DELETE a single post)
 class PostDetailView(APIView):
     serializer_class = PostSerializer
 
-    # Overrides the permission to allow GET of a single post even if the user is not the author
-    def get_permissions(self):
-        if self.request.method == 'GET':
-            return [IsAuthenticated()]
-        return [IsAuthenticated(), IsAuthor()]
-
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
 
     def get(self, request, post_id):
         try:
@@ -65,7 +57,7 @@ class PostDetailView(APIView):
             post = Post.objects.get(id=post_id)
 
             # Serialize the post object
-            serializer = PostSerializer(post)
+            serializer = PostSerializer(post, context={'request': request})
 
             # Return the serialized JSON to http response
             return ResponseFactory.success(
@@ -88,7 +80,7 @@ class PostDetailView(APIView):
             self.check_object_permissions(request, post)
 
             # Update the post using the serializer
-            serializer = PostSerializer(post, data=request.data, partial=True)
+            serializer = PostSerializer(post, data=request.data, partial=True, context={'request': request})
 
             # Check if the serializer is valid, raise exception if the request data contains invalid field
             if not serializer.is_valid():
@@ -127,7 +119,8 @@ class PostDetailView(APIView):
 
             # Return an ok response
             return ResponseFactory.deleted(
-                f"Post deleted successfully",
+                "Post deleted successfully",
+                {'Message': 'Post deleted successfully'}
             )
         except Post.DoesNotExist:
             # Throw an error if the post with the specified id is not found
@@ -135,7 +128,6 @@ class PostDetailView(APIView):
                 "Error deleting post",
                 {'Message': 'Post not found'}
             )
-
 
 # Comment List View for a specific post
 class CommentListView(ListAPIView):
@@ -346,6 +338,8 @@ class LikePostView(APIView):
         return ResponseFactory.deleted('Post unliked', 
                                        {'message': 'Post unliked',
                                         'like_count': like_count})
+
+
 class LikeCommentView(APIView):
     permission_classes = [IsAuthenticated]
 

@@ -1,23 +1,29 @@
 from tokenize import TokenError
+
+from rest_framework import generics
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import User
 from django.db.models import Q, Value
 from django.db.models.functions import Concat
-from apps.posts.models import Comment
+from apps.posts.models import Comment, Post
 from apps.posts.permissions import IsAuthor
-from apps.posts.serializers import CommentSerializer
+from apps.posts.serializers import CommentSerializer, PostSerializer
 from utils.logger import Logger
 from utils.response_factory import ResponseFactory
 from .factories import UserFactory
-from .models import Profile
-from .permissions import IsAdmin
-from .serializers import UserSerializer, RoleSerializer, ProfileSerializer
+from .models import Profile, Follow
+from .permissions import IsAdmin, IsOwnerOrAdmin
+from .serializers import ProfileSearchSerializer, ProfileSerializer, UserSerializer, RoleSerializer, \
+    UserUpdateSerializer, FollowListSerializer
 from rest_framework.generics import ListAPIView
-from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer
+from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer, FollowSerializer # UnfollowSerializer
 
-logger = Logger().get_logger()
+
+# ==============================================================================
+# User Endpoints
+# ==============================================================================
 
 class UserListView(ListAPIView):
     permission_classes = [IsAuthenticated, IsAdmin]
@@ -31,6 +37,77 @@ class UserListView(ListAPIView):
         # Return the paginated response (with pagination metadata like 'next', 'previous')
         return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
 
+class UserUpdateView(APIView):
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+
+    def patch(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            
+            # Check if request body is empty
+            if not request.data:
+                return ResponseFactory.bad_request(
+                    "No changes were provided.",
+                    {"detail": "Request body is empty. Provide at least one field to update."}
+                )
+            
+            
+            serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+
+            if not serializer.is_valid():
+                return ResponseFactory.bad_request(
+                    f"Error updating user {user.username}",
+                    serializer.errors
+                )
+                
+                
+            # Check if provided data is identical to current user data
+            if all(getattr(user, field) == value for field, value in request.data.items()):
+                return ResponseFactory.bad_request(
+                    "No changes detected.",
+                    {"detail": "Provided values are the same as the current user data."}
+                )
+
+            updated_user = serializer.save()
+
+            return ResponseFactory.success(
+                f"User {updated_user.username} updated successfully",
+                serializer.data
+            )
+
+        except User.DoesNotExist:
+            return ResponseFactory.not_found(
+                "User not found",
+                {"detail": "User not found."}
+            )
+        except Exception as e:
+            return ResponseFactory.bad_request(
+                f"An error occurred when updating the user: {str(e)}",
+                {"detail": "An error occurred when updating the user."}
+            )
+
+
+    def delete(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+
+            user.delete()
+
+            return ResponseFactory.success(
+                f"User {user.username} deleted successfully",
+                {"detail": "User deleted successfully."}
+            )
+
+        except User.DoesNotExist as e:
+            return ResponseFactory.not_found(
+                "User not found.",
+                {"detail": "User not found."}
+            )
+        except Exception as e:
+            return ResponseFactory.bad_request(
+                f"An error occurred when deleting the user: {str(e)}",
+                {"detail": "An error occurred when deleting the user."}
+            )
 
 class UserRegistrationView(APIView):
     def post(self, request):
@@ -91,7 +168,23 @@ class UserRoleView(APIView):
                 {"detail": "User not found."}
             )
 
-class ProfileSearchSuggestionsView(APIView):
+
+# ==============================================================================
+# Profile Endpoints
+# ==============================================================================
+
+class FeedView(generics.ListAPIView):
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        followed_users = Follow.objects.filter(follower=user).values_list('followed', flat=True)
+
+        return Post.objects.filter(Q(author__id__in=followed_users) | Q(author=user)).order_by('-created_at')
+
+
+class ProfileQueryView(APIView):
     """
     Returns a list of profiles based on a search query.
 
@@ -126,19 +219,27 @@ class ProfileSearchSuggestionsView(APIView):
             )
         except Exception as e:
             return ResponseFactory.bad_request(
-                "An error occurred while processing the request",
+                f"An error occurred while processing the request: {str(e)}",
                 {"detail": "An error occurred while processing the request."}
             )
 
-class ProfileView(APIView):
+class ProfileDetailView(APIView):
     """
     Returns the profile of the authenticated user.
     """
-    permission_classes = [IsAuthenticated, IsAuthor]
 
-    def get(self, request):
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAuthor()]
+
+    def get(self, request, user_id):
         try:
-            user = Profile.objects.get(user=request.user)
+            if user_id == "me":
+                user = Profile.objects.get(user=request.user)
+            else:
+                user = Profile.objects.get(user__id=user_id)
+
             serializer = UserSerializer(user)
             return ResponseFactory.success(
                 serializer.data,
@@ -152,7 +253,7 @@ class ProfileView(APIView):
             )
         except Exception as e:
             return ResponseFactory.bad_request(
-                "An error occurred while processing the request",
+                f"An error occurred while processing the request: {str(e)}",
                 {"detail": "An error occurred while processing the request."}
             )
 
@@ -160,11 +261,25 @@ class ProfileView(APIView):
         try:
             user = Profile.objects.get(user=request.user)
             serializer = ProfileSerializer(user, data=request.data, partial=True)
+            
+            # Check if request body is empty
+            if not request.data:
+                return ResponseFactory.bad_request(
+                    "No changes were provided.",
+                    {"detail": "Request body is empty. Provide at least one field to update."}
+                )
 
             if not serializer.is_valid():
                 return ResponseFactory.bad_request(
                     "Error while updating the profile",
                     serializer.errors
+                )
+                
+            # Check if provided data is identical to current user data
+            if all(getattr(user, field) == value for field, value in request.data.items()):
+                return ResponseFactory.bad_request(
+                    "No changes detected.",
+                    {"detail": "Provided values are the same as the current user data."}
                 )
 
             serializer.save()
@@ -178,39 +293,6 @@ class ProfileView(APIView):
                 {"detail": "User not found."}
             )
 
-
-class ProfileByIDView(APIView):
-    """
-
-    Returns the profile of a user by ID or the profile of the authenticated user if
-    no ID is provided.
-    """
-    def get_permissions(self):
-        if self.request.method == 'GET':
-            return [IsAuthenticated()]
-        return [IsAuthenticated(), IsAuthor()]
-
-    def get(self, request, user_id=None):
-        if user_id is None:
-            return ProfileView().get(request)
-        try:
-            user = Profile.objects.get(user__id=user_id)
-            serializer = UserSerializer(user)
-            return ResponseFactory.success(
-                serializer.data,
-                serializer.data
-            )
-        except Profile.DoesNotExist:
-            return ResponseFactory.not_found(
-                "Profile not found",
-                {"detail": "Profile not found."}
-            )
-        except Exception as e:
-            return ResponseFactory.bad_request(
-                "An error occurred while processing the request",
-                {"detail": "An error occurred while processing the request."}
-            )
-
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -219,13 +301,14 @@ class ProfileByIDView(APIView):
                 "Profile deleted successfully",
                 {'Message': 'Profile deleted successfully'}
             )
-        except Profile.DoesNotExist:
+        except User.DoesNotExist:
             return ResponseFactory.not_found(
                 "Profile not found",
                 {'Message': 'Profile not found.'}
             )
 
-class PersonalCommentsView(APIView):
+
+class ProfileCommentsView(APIView):
     permission_classes = [IsAuthenticated, IsAuthor]
 
     def get(self, request):
@@ -237,8 +320,102 @@ class PersonalCommentsView(APIView):
                 {'Message': 'No comments found'}
             )
 
-        serializer = CommentSerializer(comments, many=True)
+        serializer = CommentSerializer(comments, many=True, context={'request': request})
         return ResponseFactory.success(
             serializer.data,
             serializer.data
         )
+    
+class ProfilePostsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, user_id):
+        try:
+            if user_id == "me":
+                user = request.user
+            else:
+                user = User.objects.get(id=user_id)
+
+            posts = Post.objects.filter(author=user)
+
+            serializer = PostSerializer(posts, many=True, context={'request': request})
+            return ResponseFactory.success(
+                serializer.data,
+                serializer.data
+            )
+        except Profile.DoesNotExist:
+            return ResponseFactory.not_found(
+                "Profile not found",
+                {"detail": "Profile not found."}
+            )
+        except Exception as e:
+            return ResponseFactory.bad_request(
+                f"An error occurred while processing the request: {str(e)}",
+                {"detail": f"An error occurred while processing the request."}
+            )
+
+class FollowView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, user_id):
+        try:
+            query_type = request.query_params.get('type', None)
+
+            if query_type not in ['following', 'follower']:
+                return ResponseFactory.bad_request(
+                    "Invalid type",
+                    {"detail": "Invalid type. Use 'following' or 'follower'."}
+                )
+
+            user = User.objects.get(id=user_id)
+
+            if query_type == 'follower':
+                queryset = Follow.objects.filter(followed=user)
+            else:
+                queryset = Follow.objects.filter(follower=user)
+
+            serializer = FollowListSerializer(queryset, many=True, context={"request": request})
+
+            return ResponseFactory.success(
+                serializer.data,
+                serializer.data
+            )
+
+        except User.DoesNotExist:
+            return ResponseFactory.not_found(
+                "No user found",
+                {'Message': 'No user found'}
+            )
+        except Exception as e:
+            return ResponseFactory.bad_request(
+                "Error retrieving followers",
+                {"detail": str(e)}
+            )
+
+
+    def post(self, request, user_id):
+        try:
+            serializer = FollowSerializer(data={"user_id": user_id}, context={'request': request})
+
+            if serializer.is_valid():
+                result = serializer.save()
+
+                if isinstance(result, dict):
+                    return ResponseFactory.success('Unfollowed Successfully', {'Message': 'Unfollowed successfully'})
+
+                return ResponseFactory.created("Followed Successfully", {"Message": "Followed successfully"})
+
+            return ResponseFactory.bad_request("Error", {"Error": serializer.errors})
+
+        except User.DoesNotExist:
+            return ResponseFactory.not_found(
+                "No user found",
+                {'Message': 'No user found'}
+            )
+        except Exception as e:
+            return ResponseFactory.bad_request(
+                "Error following the user",
+                {"detail": str(e)}
+            )
+
+
