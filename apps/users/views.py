@@ -257,7 +257,7 @@ class ProfileDetailView(APIView):
                 {"detail": "An error occurred while processing the request."}
             )
 
-    def patch(self, request):
+    def patch(self, request, user_id=None):
         try:
             user = Profile.objects.get(user=request.user)
             serializer = ProfileSerializer(user, data=request.data, partial=True)
