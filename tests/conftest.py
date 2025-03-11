@@ -242,7 +242,7 @@ def mock_post_with_image_data(test_image):
     return {
         "content": "Test Post with Image",
         "post_type": "image",
-        "images": [test_image]
+        "media_files": [test_image]
     }
 
 @pytest.fixture
