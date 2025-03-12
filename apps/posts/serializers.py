@@ -28,9 +28,16 @@ class CommentSerializer(serializers.ModelSerializer):
             object_id=obj.id
         )
         request = self.context.get('request')
+        
+        if not media_queryset.exists():
+            return []
         return MediaSerializer(media_queryset, context={'request': request}).data
 
     def get_is_liked(self, obj):
+        if not self.context.get('request'):
+            return False
+        
+        # Check if the comment is liked by the current user
         user = self.context.get('request').user
         return obj.liked_by.filter(id=user.id).exists()
 
@@ -119,9 +126,16 @@ class PostSerializer(serializers.ModelSerializer):
             object_id=obj.id
         )
         request = self.context.get('request')
+        
+        if not media_queryset.exists():
+            return []
         return MediaSerializer(media_queryset, many=True, context={'request': request}).data
 
     def get_is_liked(self, obj):
+        if not self.context.get('request'):
+            return False
+        
+        # Check if the comment is liked by the current user
         user = self.context.get('request').user
         return obj.liked_by.filter(id=user.id).exists()
 
