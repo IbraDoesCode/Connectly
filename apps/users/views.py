@@ -9,7 +9,7 @@ from django.db.models import Q, Value
 from django.db.models.functions import Concat
 from apps.posts.models import Comment, Post
 from apps.posts.permissions import IsAuthor
-from apps.posts.serializers import CommentSerializer, PostSerializer
+from apps.posts.serializers import CommentSerializer, PostSerializer, PostFeedSerializer
 from utils.logger import Logger
 from utils.response_factory import ResponseFactory
 from .factories import UserFactory
@@ -174,7 +174,7 @@ class UserRoleView(APIView):
 # ==============================================================================
 
 class FeedView(generics.ListAPIView):
-    serializer_class = PostSerializer
+    serializer_class = PostFeedSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
