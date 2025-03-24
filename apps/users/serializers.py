@@ -91,6 +91,15 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = ['id', 'user', 'first_name', 'last_name', 'bio']
 
+
+class ProfileBasicSerializer(serializers.ModelSerializer):
+    username = serializers.ReadOnlyField(source='user.username')
+
+    class Meta:
+        model = Profile
+        fields = ['id', 'username', 'first_name', 'last_name']
+
+
         
 class ProfileSearchSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
