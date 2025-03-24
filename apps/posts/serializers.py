@@ -7,11 +7,11 @@ from .models import Post, Comment
 
 from ..medias.models import Media
 from ..medias.serializers import MediaSerializer
-
+from ..users.serializers import ProfileBasicSerializer
 
 
 class CommentSerializer(serializers.ModelSerializer):
-    author = serializers.ReadOnlyField(source='author.username')
+    author = ProfileBasicSerializer(source='author.profile', read_only=True)
     post = serializers.ReadOnlyField(source='post.id')
     media_files = serializers.FileField(write_only=True, required=False)
     media = serializers.SerializerMethodField()
@@ -105,20 +105,50 @@ class CommentSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
-
-class PostSerializer(serializers.ModelSerializer):
-    author = serializers.ReadOnlyField(source='author.username')
-    comments = CommentSerializer(many=True, read_only=True)
-    media_files = serializers.ListField(
-        child=serializers.FileField(), write_only=True, required=False
-    )
+class PostFeedSerializer(serializers.ModelSerializer):
+    author = ProfileBasicSerializer(source='author.profile', read_only=True)
+    comments = serializers.SerializerMethodField()
     media = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
-    like_count = serializers.SerializerMethodField()
+    like_count = serializers.IntegerField(source='liked_by.count', read_only=True)
+    comment_count = serializers.IntegerField(source='comments.count', read_only=True)
 
     class Meta:
         model = Post
-        fields = ['id', 'content', 'post_type', 'author', 'comments', 'created_at', 'media', 'media_files', 'is_liked', 'like_count']
+        fields = ['id', 'content', 'post_type', 'author', 'comments', 'comment_count', 'created_at', 'media',
+                  'is_liked', 'like_count']
+
+    def get_comments(self, obj):
+        preview_comments = obj.comments.all()[:3]
+        return CommentSerializer(preview_comments, many=True).data
+
+    def get_media(self, obj):
+        media_queryset = Media.objects.filter(
+            content_type=ContentType.objects.get_for_model(obj),
+            object_id=obj.id
+        )
+        request = self.context.get('request')
+        return MediaSerializer(media_queryset, many=True, context={'request': request}).data if media_queryset.exists() else []
+
+    def get_is_liked(self, obj):
+        request = self.context.get('request')
+        return request and obj.liked_by.filter(id=request.user.id).exists()
+
+
+
+class PostSerializer(serializers.ModelSerializer):
+    author = ProfileBasicSerializer(source='author.profile', read_only=True)
+    media_files = serializers.ListField(
+        child=serializers.FileField(), write_only=True, required=False
+    )
+    media = serializers.SerializerMethodField(read_only=True)
+    is_liked = serializers.SerializerMethodField(read_only=True)
+    like_count = serializers.IntegerField(source='liked_by.count', read_only=True)
+    comment_count = serializers.IntegerField(source='comments.count', read_only=True)
+
+    class Meta:
+        model = Post
+        fields = ['id', 'content', 'post_type', 'author', 'created_at', 'media', 'media_files', 'is_liked', 'like_count', 'comment_count']
 
     def get_media(self, obj):
         media_queryset = Media.objects.filter(
