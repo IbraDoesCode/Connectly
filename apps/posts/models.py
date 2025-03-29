@@ -21,10 +21,16 @@ class Post(BaseModel):
         ('image', 'Image'),
         ('video', 'Video')
     ]
+    PRIVACY_TYPES = [
+        ('public', 'Public'),
+        ('private', 'Private'),
+        ('followers', 'Followers')
+    ]
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     content = models.TextField(blank=True)
     post_type = models.CharField(max_length=10, choices=POST_TYPES, default='text')
     liked_by = models.ManyToManyField(User, related_name='liked_posts')
+    privacy_type = models.CharField(max_length=10, choices=PRIVACY_TYPES, default='public')
 
     def clean(self):
         media = Media.objects.filter(content_type=ContentType.objects.get_for_model(self), object_id=self.id)
