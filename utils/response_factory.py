@@ -25,6 +25,11 @@ class ResponseFactory:
     def bad_request(message, data=None):
         ResponseFactory.logger.error(message)
         return Response(data, status=status.HTTP_400_BAD_REQUEST)
+    
+    @staticmethod
+    def forbidden(message, data=None):
+        ResponseFactory.logger.error(message)
+        return Response(data, status=status.HTTP_403_FORBIDDEN)
 
     @staticmethod
     def not_found(message, data=None):
