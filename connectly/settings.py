@@ -220,3 +220,10 @@ CORS_ALLOW_HEADERS = [
     'accept',
     'origin'
 ]
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'connectly',
+    }
+}
