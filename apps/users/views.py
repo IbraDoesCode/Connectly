@@ -168,7 +168,6 @@ class UserRoleView(APIView):
                 {"detail": "User not found."}
             )
 
-
 # ==============================================================================
 # Profile Endpoints
 # ==============================================================================
@@ -180,9 +179,19 @@ class FeedView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         followed_users = Follow.objects.filter(follower=user).values_list('followed', flat=True)
+        feed_type = self.request.query_params.get('feed_type', 'public')
 
-        return Post.objects.filter(Q(author__id__in=followed_users) | Q(author=user)).order_by('-created_at')
+        # Default feed type
+        posts = Post.objects.filter(privacy_type='public').order_by('-created_at')
 
+        if feed_type == 'following':
+            posts = Post.objects.filter(
+                Q(author__id__in=followed_users, privacy_type='followers') |
+                Q(author__id__in=followed_users, privacy_type='public') |
+                Q(author=user)
+            ).order_by('-created_at').distinct()
+        
+        return posts
 
 class ProfileQueryView(APIView):
     """
