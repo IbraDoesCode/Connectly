@@ -148,7 +148,7 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['id', 'content', 'post_type', 'author', 'created_at', 'media', 'media_files', 'is_liked', 'like_count', 'comment_count']
+        fields = ['id', 'content', 'post_type', 'author', 'created_at', 'media', 'media_files', 'is_liked', 'like_count', 'comment_count', 'privacy_type']
 
     def get_media(self, obj):
         media_queryset = Media.objects.filter(
