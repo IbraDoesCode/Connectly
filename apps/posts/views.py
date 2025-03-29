@@ -1,8 +1,11 @@
 # Create your views here.
+from django.db.models import Q
+from django.core.cache import cache
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from utils.response_factory import ResponseFactory
 from .models import Post, Comment
+from ..users.models import Follow
 from .permissions import IsAuthor, IsOwnerOrReadOnly
 from .serializers import PostSerializer, CommentSerializer
 from rest_framework.generics import ListAPIView
@@ -13,16 +16,27 @@ class PostListView(ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PostSerializer
 
+    def get_queryset(self):
+        user = self.request.user
+        following = Follow.objects.filter(follower=user).values_list('followed', flat=True)
+
+        posts = Post.objects.filter(
+            Q(privacy_type='public') |
+            Q(author=user) |
+            Q(author__id__in=following, privacy_type='followers')
+        ).order_by('-created_at')
+
+        return posts
+
     def get(self, request, *args, **kwargs):
         # Get the queryset and paginate it manually
-        posts = self.paginate_queryset(Post.objects.all()) # Apply pagination
+        posts = self.paginate_queryset(self.get_queryset()) # Apply pagination
         
         # Serialize the paginated queryset
         serializer = PostSerializer(posts, many=True, context={'request': request})
         
         # Return the paginated response (with pagination metadata like 'next', 'previous')
         return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
-
 
     def post(self, request):
         # Take the data from the request and convert it to JSON
@@ -56,6 +70,15 @@ class PostDetailView(APIView):
             # Get specific post based on id
             post = Post.objects.get(id=post_id)
 
+            if post.author != request.user:
+                if post.privacy_type == 'private':
+                    return ResponseFactory.forbidden('Access Denied', {'detail': 'You do not have access to this post'})
+            
+                if post.privacy_type == 'followers':
+                    is_following = Follow.objects.filter(follower=request.user, followed=post.author).exists()
+                    if not is_following:
+                        return ResponseFactory.forbidden('Access Denied', {'detail': 'You do not have access to this post'})
+            
             # Serialize the post object
             serializer = PostSerializer(post, context={'request': request})
 
@@ -92,7 +115,11 @@ class PostDetailView(APIView):
 
             # Save the serializer data to the db
             serializer.save()
-            print(serializer.data)
+            
+            user = request.user
+            cache.delete(f'{user.id}_public')
+            cache.delete(f'{user.id}_private')
+
             # Return an ok response
             return ResponseFactory.success(
                 f"Post updated successfully",
@@ -116,6 +143,10 @@ class PostDetailView(APIView):
 
             # Delete the post from the db
             post.delete()
+
+            user = request.user
+            cache.delete(f'{user.id}_public')
+            cache.delete(f'{user.id}_private')
 
             # Return an ok response
             return ResponseFactory.deleted(
