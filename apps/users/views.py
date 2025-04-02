@@ -1,16 +1,17 @@
 from tokenize import TokenError
 
+from rest_framework.response import Response
 from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 from django.db.models import Q, Value
+from django.core.cache import cache
 from django.db.models.functions import Concat
 from apps.posts.models import Comment, Post
 from apps.posts.permissions import IsAuthor
-from apps.posts.serializers import CommentSerializer, PostSerializer
-from utils.logger import Logger
+from apps.posts.serializers import CommentSerializer, PostSerializer, PostFeedSerializer
 from utils.response_factory import ResponseFactory
 from .factories import UserFactory
 from .models import Profile, Follow
@@ -28,7 +29,7 @@ from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer
 class UserListView(ListAPIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
-    def get(self, request):
+    def get(self, request):        
         users = self.paginate_queryset(Profile.objects.all()) # Apply pagination
 
         # Serialize the paginated queryset
@@ -168,21 +169,31 @@ class UserRoleView(APIView):
                 {"detail": "User not found."}
             )
 
-
 # ==============================================================================
 # Profile Endpoints
 # ==============================================================================
 
 class FeedView(generics.ListAPIView):
-    serializer_class = PostSerializer
+    serializer_class = PostFeedSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
         followed_users = Follow.objects.filter(follower=user).values_list('followed', flat=True)
+        feed_type = self.request.query_params.get('feed_type', 'public')
 
-        return Post.objects.filter(Q(author__id__in=followed_users) | Q(author=user)).order_by('-created_at')
+        posts = Post.objects.order_by('-created_at')
 
+        if feed_type == 'public':
+            posts = posts.filter(privacy_type='public')
+        elif feed_type == 'following':
+            posts = Post.objects.filter(
+                Q(author__id__in=followed_users, privacy_type='followers') |
+                Q(author__id__in=followed_users, privacy_type='public') |
+                Q(author=user)
+            ).order_by('-created_at').distinct()
+            
+        return posts
 
 class ProfileQueryView(APIView):
     """
@@ -201,6 +212,12 @@ class ProfileQueryView(APIView):
                 "Search query is required",
                 {"detail": "Search query is required."}
             )
+        
+        cache_key = f"profile_search_{search_query}"
+        cached_results = cache.get(cache_key)
+
+        if cached_results:
+            return ResponseFactory.success(cached_results, cached_results)
 
         try:
             # Combine first and last name as a searchable field
@@ -212,10 +229,13 @@ class ProfileQueryView(APIView):
             ).only('id', 'user__username', 'first_name', 'last_name')
 
             serializer = ProfileSearchSerializer(profiles, many=True)
+            response_data = serializer.data
+
+            cache.set(cache_key, response_data, timeout=60 * 5)
 
             return ResponseFactory.success(
-                serializer.data,
-                serializer.data
+                response_data,
+                response_data
             )
         except Exception as e:
             return ResponseFactory.bad_request(
@@ -235,15 +255,25 @@ class ProfileDetailView(APIView):
 
     def get(self, request, user_id):
         try:
+            cache_key = f'profile_{user_id}'
+            cached_profile = cache.get(cache_key)
+
+            if cached_profile:
+                return ResponseFactory.success(cached_profile, cached_profile)
+
             if user_id == "me":
                 user = Profile.objects.get(user=request.user)
             else:
                 user = Profile.objects.get(user__id=user_id)
 
             serializer = UserSerializer(user)
+            response_data = serializer.data
+
+            cache.set(cache_key, response_data, timeout=60*5)
+
             return ResponseFactory.success(
-                serializer.data,
-                serializer.data
+                response_data,
+                response_data
             )
 
         except Profile.DoesNotExist:
@@ -257,7 +287,7 @@ class ProfileDetailView(APIView):
                 {"detail": "An error occurred while processing the request."}
             )
 
-    def patch(self, request):
+    def patch(self, request, user_id=None):
         try:
             user = Profile.objects.get(user=request.user)
             serializer = ProfileSerializer(user, data=request.data, partial=True)
@@ -283,6 +313,8 @@ class ProfileDetailView(APIView):
                 )
 
             serializer.save()
+            cache.delete(f"profile_{request.user.id}")
+            cache.delete(f"profile_me")
             return ResponseFactory.success(
                 "Profile updated successfully",
                 serializer.data
@@ -297,6 +329,7 @@ class ProfileDetailView(APIView):
         try:
             user = User.objects.get(id=user_id)
             user.delete()
+            cache.delete(f"profile_{request.user.id}")
             return ResponseFactory.success(
                 "Profile deleted successfully",
                 {'Message': 'Profile deleted successfully'}
@@ -338,10 +371,20 @@ class ProfilePostsView(APIView):
 
             posts = Post.objects.filter(author=user)
 
+            cache_key = f"profile_posts_{user.id}"
+            cached_posts = cache.get(cache_key)
+
+            if cached_posts:
+                return ResponseFactory.success(cached_posts, cached_posts)
+
             serializer = PostSerializer(posts, many=True, context={'request': request})
+            response_data = serializer.data
+
+            cache.set(cache_key, response_data, timeout=60 * 10)
+
             return ResponseFactory.success(
-                serializer.data,
-                serializer.data
+                response_data,
+                response_data
             )
         except Profile.DoesNotExist:
             return ResponseFactory.not_found(
@@ -366,6 +409,12 @@ class FollowView(APIView):
                     "Invalid type",
                     {"detail": "Invalid type. Use 'following' or 'follower'."}
                 )
+            
+            cache_key = f"{query_type}_{user_id}"
+            cached_data = cache.get(cache_key)
+
+            if cached_data:
+                return ResponseFactory.success(cached_data, cached_data)
 
             user = User.objects.get(id=user_id)
 
@@ -375,10 +424,13 @@ class FollowView(APIView):
                 queryset = Follow.objects.filter(follower=user)
 
             serializer = FollowListSerializer(queryset, many=True, context={"request": request})
+            response_data = serializer.data
+
+            cache.set(cache_key, response_data, timeout=60 * 10)
 
             return ResponseFactory.success(
-                serializer.data,
-                serializer.data
+                response_data,
+                response_data
             )
 
         except User.DoesNotExist:
@@ -399,6 +451,9 @@ class FollowView(APIView):
 
             if serializer.is_valid():
                 result = serializer.save()
+
+                cache.delete(f"followers_{user_id}")
+                cache.delete(f"following_{request.user.id}")
 
                 if isinstance(result, dict):
                     return ResponseFactory.success('Unfollowed Successfully', {'Message': 'Unfollowed successfully'})
