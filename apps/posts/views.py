@@ -1,6 +1,5 @@
 # Create your views here.
 from django.db.models import Q
-from django.core.cache import cache
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from utils.response_factory import ResponseFactory
@@ -115,10 +114,6 @@ class PostDetailView(APIView):
 
             # Save the serializer data to the db
             serializer.save()
-            
-            user = request.user
-            cache.delete(f'{user.id}_public')
-            cache.delete(f'{user.id}_private')
 
             # Return an ok response
             return ResponseFactory.success(
@@ -143,10 +138,6 @@ class PostDetailView(APIView):
 
             # Delete the post from the db
             post.delete()
-
-            user = request.user
-            cache.delete(f'{user.id}_public')
-            cache.delete(f'{user.id}_private')
 
             # Return an ok response
             return ResponseFactory.deleted(
