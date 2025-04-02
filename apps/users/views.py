@@ -29,20 +29,11 @@ from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer
 class UserListView(ListAPIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
-    def get(self, request):
-        cache_key = "user_list"
-        cached_users = cache.get(cache_key)
-
-        if cached_users:
-            return ResponseFactory.success(cached_users, cached_users)
-        
+    def get(self, request):        
         users = self.paginate_queryset(Profile.objects.all()) # Apply pagination
 
         # Serialize the paginated queryset
         serializer = UserSerializer(users, many=True)
-        response_data = self.get_paginated_response(serializer.data).data
-
-        cache.set(cache_key, response_data, timeout=60 * 30)
 
         # Return the paginated response (with pagination metadata like 'next', 'previous')
         return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
@@ -203,21 +194,6 @@ class FeedView(generics.ListAPIView):
             ).order_by('-created_at').distinct()
             
         return posts
-    
-    def list(self, request, *args, **kwargs):
-        user = self.request.user
-        feed_type = self.request.query_params.get('feed_type', 'public')
-        cache_key = f'{user.id}_{feed_type}'
-
-        cached_data = cache.get(cache_key)
-
-        if cached_data:
-            return Response(cached_data)
-        
-        response = super().list(request, *args, **kwargs)
-        cache.set(cache_key, response.data, timeout=60*5)
-
-        return response
 
 class ProfileQueryView(APIView):
     """
@@ -338,6 +314,7 @@ class ProfileDetailView(APIView):
 
             serializer.save()
             cache.delete(f"profile_{request.user.id}")
+            cache.delete(f"profile_me")
             return ResponseFactory.success(
                 "Profile updated successfully",
                 serializer.data
