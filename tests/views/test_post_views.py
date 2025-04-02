@@ -27,8 +27,8 @@ def test_create_post_with_image(auth_client, post_list_url, mock_post_with_image
     assert response.status_code == status.HTTP_201_CREATED
     assert Post.objects.count() == 1
     assert Media.objects.count() == 1
-    assert 'post_images' in response.data
-    assert len(response.data['post_images']) == 1
+    assert 'media' in response.data
+    assert len(response.data['media']) == 1
 
 @pytest.mark.django_db
 def test_create_post_with_invalid_image(auth_client, post_list_url, mock_post_with_invalid_image):
@@ -45,7 +45,7 @@ def test_create_image_post_missing_image(auth_client, post_list_url):
     response = auth_client.post(post_list_url, data, secure=True, format='multipart')
     
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "Image posts must include at least one image" in str(response.data)
+    assert "At least one media file is required." in str(response.data)
 
 # Post Video Tests
 @pytest.mark.django_db
@@ -78,7 +78,7 @@ def test_create_video_post_missing_video(auth_client, post_list_url):
     response = auth_client.post(post_list_url, data, secure=True, format='multipart')
     
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "Video posts must include at least one video" in str(response.data)
+    assert "At least one media file is required." in str(response.data)
 
 @pytest.mark.django_db
 def test_create_post_invalid(auth_client, post_list_url):
@@ -235,7 +235,7 @@ def test_create_post_with_multiple_images(auth_client, post_list_url):
     data = {
         "content": "Test Post with Multiple Images",
         "post_type": "image",
-        "images": [image1, image2]
+        "media_files": [image1, image2]
     }
     
     response = auth_client.post(post_list_url, data, secure=True, format='multipart')
@@ -246,7 +246,7 @@ def test_create_post_with_multiple_images(auth_client, post_list_url):
     assert response.status_code == status.HTTP_201_CREATED
     assert Post.objects.count() == 1
     assert Media.objects.count() == 2
-    assert len(response.data['post_images']) == 2
+    assert len(response.data['media']) == 2
 
 # Cleanup Test
 @pytest.mark.django_db
