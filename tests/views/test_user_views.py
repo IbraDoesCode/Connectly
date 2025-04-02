@@ -70,7 +70,7 @@ def test_get_users(admin_auth_client, get_all_users_url, mock_user_data):
 def test_get_users_logged_out(api_client, get_all_users_url, mock_user_data):
 
     response = api_client.get(get_all_users_url, secure=True)
-    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
 @pytest.mark.django_db
@@ -222,7 +222,7 @@ def test_change_user_role(api_client, admin_auth_client, get_all_users_url, chan
 @pytest.mark.django_db
 def test_profile_update_bio(auth_client, populate_users, update_user_url):
     user1, _, _ = populate_users
-    search_url = reverse('user-profile')
+    search_url = reverse('profiles:user-profile-from-id', kwargs={'user_id': user1.user.id})
     response = auth_client.patch(
         search_url,
         {"bio": "This is a bioflu"},
@@ -236,7 +236,7 @@ def test_profile_update_bio(auth_client, populate_users, update_user_url):
 @pytest.mark.django_db
 def test_profile_update_firstname_only(auth_client, populate_users):
     user1, _, _ = populate_users
-    search_url = reverse('user-profile')
+    search_url = reverse('profiles:user-profile-from-id', kwargs={'user_id': user1.user.id})
     response = auth_client.patch(
         search_url,
         {"first_name": "Gerard"},
@@ -253,7 +253,7 @@ def test_delete_user_profile(admin_auth_client, get_all_users_url, mock_user_dat
 
     assert Profile.objects.filter(id=user1.id).exists()
 
-    search_url = reverse('user-profile-from-id', kwargs={'user_id': user1.user.id})
+    search_url = reverse('profiles:user-profile-from-id', kwargs={'user_id': user1.user.id})
     response = admin_auth_client.delete(search_url, secure=True)
 
     assert response.status_code == status.HTTP_200_OK
@@ -264,7 +264,7 @@ def test_delete_user_profile(admin_auth_client, get_all_users_url, mock_user_dat
 @pytest.mark.django_db
 def test_profile_search_suggestions_username(auth_client, populate_users):
     user1, _, _ = populate_users
-    search_url = reverse('profile-search-suggestions') + "?search_query=user1"
+    search_url = reverse('profiles:user-profiles') + "?search_query=user1"
     response = auth_client.get(search_url, secure=True)
 
     assert response.status_code == status.HTTP_200_OK
@@ -275,7 +275,7 @@ def test_profile_search_suggestions_username(auth_client, populate_users):
 @pytest.mark.django_db
 def test_profile_search_suggestions_fullname(auth_client, populate_users):
     _, user2, _ = populate_users
-    search_url = reverse('profile-search-suggestions') + "?search_query=User2%20Lastname2"
+    search_url = reverse('profiles:user-profiles') + "?search_query=User2%20Lastname2"
     response = auth_client.get(search_url, secure=True)
 
     assert response.status_code == status.HTTP_200_OK
@@ -286,7 +286,7 @@ def test_profile_search_suggestions_fullname(auth_client, populate_users):
 @pytest.mark.django_db
 def test_profile_search_suggestions_incomplete_name(auth_client, populate_users):
     user1, _, _ = populate_users
-    search_url = reverse('profile-search-suggestions') + "?search_query=user"
+    search_url = reverse('profiles:user-profiles') + "?search_query=user"
     response = auth_client.get(search_url, secure=True)
 
     assert response.status_code == status.HTTP_200_OK
@@ -297,7 +297,7 @@ def test_profile_search_suggestions_incomplete_name(auth_client, populate_users)
 @pytest.mark.django_db
 def test_profile_search_suggestions_case_insensitive(auth_client, populate_users):
     _, user2, _ = populate_users
-    search_url = reverse('profile-search-suggestions') + "?search_query=uSeR2%20LaStNaMe2"
+    search_url = reverse('profiles:user-profiles') + "?search_query=uSeR2%20LaStNaMe2"
     response = auth_client.get(search_url, secure=True)
 
     assert response.status_code == status.HTTP_200_OK
@@ -307,7 +307,7 @@ def test_profile_search_suggestions_case_insensitive(auth_client, populate_users
 
 @pytest.mark.django_db
 def test_profile_search_suggestions_no_query(auth_client):
-    search_url = reverse('profile-search-suggestions')
+    search_url = reverse('profiles:user-profiles')
     response = auth_client.get(search_url, secure=True)
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -316,7 +316,7 @@ def test_profile_search_suggestions_no_query(auth_client):
 
 @pytest.mark.django_db
 def test_profile_search_suggestions_no_match(auth_client):
-    search_url = reverse('profile-search-suggestions') + "?search_query=NonExistent"
+    search_url = reverse('profiles:user-profiles') + "?search_query=NonExistent"
     response = auth_client.get(search_url, secure=True)
 
     assert response.status_code == status.HTTP_200_OK
@@ -326,7 +326,7 @@ def test_profile_search_suggestions_no_match(auth_client):
 def test_get_own_profile(auth_client, populate_users):
     user1, _, _ = populate_users  # Use the first user
     auth_client.force_authenticate(user=user1.user)
-    profile_url = reverse('user-profile')
+    profile_url = reverse('profiles:user-profile-from-id', kwargs={'user_id': user1.user.id})
     response = auth_client.get(profile_url, secure=True)
 
     assert response.status_code == status.HTTP_200_OK
@@ -334,16 +334,17 @@ def test_get_own_profile(auth_client, populate_users):
     assert response.data['last_name'] == user1.last_name
 
 @pytest.mark.django_db
-def test_get_own_profile_not_authenticated(api_client):
-    profile_url = reverse('user-profile')
+def test_get_own_profile_not_authenticated(api_client, populate_users):
+    user1, _, _ = populate_users
+    profile_url = reverse('profiles:user-profile-from-id', kwargs={'user_id': user1.user.id})
     response = api_client.get(profile_url, secure=True)
 
-    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.status_code == status.HTTP_403_FORBIDDEN
 
 @pytest.mark.django_db
 def test_get_profile_by_id(auth_client, populate_users):
     user1, user2, _ = populate_users
-    profile_url = reverse('user-profile-from-id', kwargs={'user_id': user2.user.id})
+    profile_url = reverse('profiles:user-profile-from-id', kwargs={'user_id': user2.user.id})
     response = auth_client.get(profile_url, secure=True)
 
     assert response.status_code == status.HTTP_200_OK
@@ -352,7 +353,7 @@ def test_get_profile_by_id(auth_client, populate_users):
 
 @pytest.mark.django_db
 def test_get_profile_by_invalid_id(auth_client):
-    profile_url = reverse('user-profile-from-id', kwargs={'user_id': 9999})
+    profile_url = reverse('profiles:user-profile-from-id', kwargs={'user_id': 9999})
     response = auth_client.get(profile_url, secure=True)
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
