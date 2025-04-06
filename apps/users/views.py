@@ -182,18 +182,16 @@ class FeedView(generics.ListAPIView):
         followed_users = Follow.objects.filter(follower=user).values_list('followed', flat=True)
         feed_type = self.request.query_params.get('feed_type', 'public')
 
-        posts = Post.objects.order_by('-created_at')
-
         if feed_type == 'public':
-            posts = posts.filter(privacy_type='public')
+            return Post.objects.filter(privacy_type='public').order_by('-created_at')
         elif feed_type == 'following':
-            posts = Post.objects.filter(
-                Q(author__id__in=followed_users, privacy_type='followers') |
+            return Post.objects.filter(
+                Q(author=user) |
                 Q(author__id__in=followed_users, privacy_type='public') |
-                Q(author=user)
+                Q(author__id__in=followed_users, privacy_type='followers')
             ).order_by('-created_at').distinct()
             
-        return posts
+        return Post.objects.none()
 
 class ProfileQueryView(APIView):
     """
