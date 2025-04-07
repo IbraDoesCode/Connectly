@@ -512,7 +512,7 @@ Build Connectly from the source and intsall dependencies:
 
 1. Clone the repository:
 ```
-git clone https://github.com/your-username/connectly.git
+git clone https://github.com/IbraDoesCode/connectly.git
 ```
 
 2. Create a virtual environment and activate it:
