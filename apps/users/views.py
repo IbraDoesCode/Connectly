@@ -215,7 +215,9 @@ class ProfileQueryView(APIView):
         cached_results = cache.get(cache_key)
 
         if cached_results:
-            return ResponseFactory.success(cached_results, cached_results)
+            response = ResponseFactory.success(cached_results, cached_results)
+            response['X-Cache'] = 'HIT'
+            return response
 
         try:
             # Combine first and last name as a searchable field
@@ -231,10 +233,12 @@ class ProfileQueryView(APIView):
 
             cache.set(cache_key, response_data, timeout=60 * 5)
 
-            return ResponseFactory.success(
+            response = ResponseFactory.success(
                 response_data,
                 response_data
             )
+            response['X-Cache'] = 'MISS'
+            return response
         except Exception as e:
             return ResponseFactory.bad_request(
                 f"An error occurred while processing the request: {str(e)}",
@@ -257,7 +261,9 @@ class ProfileDetailView(APIView):
             cached_profile = cache.get(cache_key)
 
             if cached_profile:
-                return ResponseFactory.success(cached_profile, cached_profile)
+                response = ResponseFactory.success(cached_profile, cached_profile)
+                response['X-Cache'] = 'HIT'
+                return response
 
             if user_id == "me":
                 user = Profile.objects.get(user=request.user)
@@ -269,10 +275,12 @@ class ProfileDetailView(APIView):
 
             cache.set(cache_key, response_data, timeout=60*5)
 
-            return ResponseFactory.success(
+            response = ResponseFactory.success(
                 response_data,
                 response_data
             )
+            response['X-Cache'] = 'MISS'
+            return response
 
         except Profile.DoesNotExist:
             return ResponseFactory.not_found(
@@ -373,17 +381,21 @@ class ProfilePostsView(APIView):
             cached_posts = cache.get(cache_key)
 
             if cached_posts:
-                return ResponseFactory.success(cached_posts, cached_posts)
+                response =  ResponseFactory.success(cached_posts, cached_posts)
+                response['X-Cache'] = 'HIT'
+                return response
 
             serializer = PostSerializer(posts, many=True, context={'request': request})
             response_data = serializer.data
 
             cache.set(cache_key, response_data, timeout=60 * 10)
 
-            return ResponseFactory.success(
+            response = ResponseFactory.success(
                 response_data,
                 response_data
             )
+            response['X-Cache'] = 'MISS'
+            return response
         except Profile.DoesNotExist:
             return ResponseFactory.not_found(
                 "Profile not found",
@@ -412,7 +424,9 @@ class FollowView(APIView):
             cached_data = cache.get(cache_key)
 
             if cached_data:
-                return ResponseFactory.success(cached_data, cached_data)
+                response = ResponseFactory.success(cached_data, cached_data)
+                response['X-Cache'] = 'HIT'
+                return response
 
             user = User.objects.get(id=user_id)
 
@@ -426,10 +440,12 @@ class FollowView(APIView):
 
             cache.set(cache_key, response_data, timeout=60 * 10)
 
-            return ResponseFactory.success(
+            response = ResponseFactory.success(
                 response_data,
                 response_data
             )
+            response['X-Cache'] = 'MISS'
+            return response
 
         except User.DoesNotExist:
             return ResponseFactory.not_found(
