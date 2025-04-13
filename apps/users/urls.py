@@ -20,8 +20,9 @@ profile_patterns = [
     # Profile Routes
     path('feed/', FeedView.as_view(), name='user-feed'),
     path('', ProfileQueryView.as_view(), name='user-profiles'),
+    path('suggestions/', SuggestedUsersView.as_view(), name='follow-suggestions'),
     path('<str:user_id>/', ProfileDetailView.as_view(), name='user-profile-from-id'),
     path('<str:user_id>/posts/', ProfilePostsView.as_view(), name='user-posts'),
     path('<str:user_id>/comments/', ProfileCommentsView.as_view(), name='user-comments'),
-    path('<str:user_id>/follow', FollowView.as_view(), name='user-follow'),
+    path('<str:user_id>/follow/', FollowView.as_view(), name='user-follow'),
 ]
