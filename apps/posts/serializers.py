@@ -115,7 +115,7 @@ class PostFeedSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['id', 'content', 'post_type', 'author', 'comments', 'comment_count', 'created_at', 'media',
+        fields = ['id', 'content', 'post_type', 'privacy_type', 'author', 'comments', 'comment_count', 'created_at', 'media',
                   'is_liked', 'like_count']
 
     def get_comments(self, obj):
