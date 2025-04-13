@@ -4,6 +4,7 @@ from rest_framework.serializers import ValidationError
 
 from .factories import UserFactory
 from .models import Profile, Follow
+from ..posts.models import Post
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -14,14 +15,31 @@ class UserSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(required=True)
     last_name = serializers.CharField(required=True)
     full_name = serializers.SerializerMethodField(read_only=True)
+    is_following = serializers.SerializerMethodField(read_only=True)
+    posts_count = serializers.SerializerMethodField(read_only=True)
+    followers = serializers.SerializerMethodField(read_only=True)
+    following = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Profile
-        fields = ['id', 'username', 'email', 'password', 'first_name', 'last_name', 'bio', 'full_name']
+        fields = ['id', 'username', 'email', 'password', 'first_name', 'last_name', 'bio', 'full_name', 'is_following', 'created_at', 'posts_count', 'followers', 'following']
         read_only_fields = ['id', 'full_name']
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}"
+    
+    def get_is_following(self, obj):
+        user = self.context['request'].user
+        return Follow.objects.filter(follower=user, followed=obj.user).exists()
+    
+    def get_posts_count(self, obj):
+        return Post.objects.filter(author=obj.user).count()
+    
+    def get_followers(self, obj):
+        return Follow.objects.filter(followed=obj.user).count()
+
+    def get_following(self, obj):
+        return Follow.objects.filter(follower=obj.user).count()
 
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():
@@ -94,10 +112,14 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 class ProfileBasicSerializer(serializers.ModelSerializer):
     username = serializers.ReadOnlyField(source='user.username')
+    full_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Profile
-        fields = ['id', 'username', 'first_name', 'last_name']
+        fields = ['id', 'username', 'full_name']
+
+    def get_full_name(self, obj):
+        return f'{obj.first_name} {obj.last_name}'
 
 
         
