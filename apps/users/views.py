@@ -1,10 +1,9 @@
 from tokenize import TokenError
 
-from rest_framework.response import Response
-from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.db.models import Q, Value
 from django.core.cache import cache
@@ -20,7 +19,7 @@ from .serializers import ProfileSearchSerializer, ProfileSerializer, UserSeriali
     UserUpdateSerializer, FollowListSerializer
 from rest_framework.generics import ListAPIView
 from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer, FollowSerializer # UnfollowSerializer
-
+import random
 
 # ==============================================================================
 # User Endpoints
@@ -173,7 +172,7 @@ class UserRoleView(APIView):
 # Profile Endpoints
 # ==============================================================================
 
-class FeedView(generics.ListAPIView):
+class FeedView(ListAPIView):
     serializer_class = PostFeedSerializer
     permission_classes = [IsAuthenticated]
 
@@ -186,7 +185,6 @@ class FeedView(generics.ListAPIView):
             return Post.objects.filter(privacy_type='public').order_by('-created_at')
         elif feed_type == 'following':
             return Post.objects.filter(
-                Q(author=user) |
                 Q(author__id__in=followed_users, privacy_type='public') |
                 Q(author__id__in=followed_users, privacy_type='followers')
             ).order_by('-created_at').distinct()
@@ -257,40 +255,21 @@ class ProfileDetailView(APIView):
 
     def get(self, request, user_id):
         try:
-            cache_key = f'profile_{user_id}'
-            cached_profile = cache.get(cache_key)
-
-            if cached_profile:
-                response = ResponseFactory.success(cached_profile, cached_profile)
-                response['X-Cache'] = 'HIT'
-                return response
-
             if user_id == "me":
                 user = Profile.objects.get(user=request.user)
             else:
                 user = Profile.objects.get(user__id=user_id)
 
-            serializer = UserSerializer(user)
+
+            serializer = UserSerializer(user, context={'request': request})
             response_data = serializer.data
 
-            cache.set(cache_key, response_data, timeout=60*5)
-
-            response = ResponseFactory.success(
-                response_data,
-                response_data
-            )
-            response['X-Cache'] = 'MISS'
-            return response
+            return ResponseFactory.success('Profile found', response_data)
 
         except Profile.DoesNotExist:
             return ResponseFactory.not_found(
                 "Profile not found",
                 {"detail": "Profile not found."}
-            )
-        except Exception as e:
-            return ResponseFactory.bad_request(
-                f"An error occurred while processing the request: {str(e)}",
-                {"detail": "An error occurred while processing the request."}
             )
 
     def patch(self, request, user_id=None):
@@ -365,48 +344,24 @@ class ProfileCommentsView(APIView):
             serializer.data
         )
     
-class ProfilePostsView(APIView):
+class ProfilePostsView(ListAPIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = PostSerializer
 
-    def get(self, request, user_id):
-        try:
-            if user_id == "me":
-                user = request.user
-            else:
-                user = User.objects.get(id=user_id)
+    def get_queryset(self):
+        user_id = self.kwargs.get('user_id')
+        if user_id == str(self.request.user.id):
+            user = self.request.user
+            return Post.objects.filter(author=user) 
+        
+        user = get_object_or_404(User, id=user_id)
+        is_following = Follow.objects.filter(follower=self.request.user, followed=user).exists()
 
-            posts = Post.objects.filter(author=user)
-
-            cache_key = f"profile_posts_{user.id}"
-            cached_posts = cache.get(cache_key)
-
-            if cached_posts:
-                response =  ResponseFactory.success(cached_posts, cached_posts)
-                response['X-Cache'] = 'HIT'
-                return response
-
-            serializer = PostSerializer(posts, many=True, context={'request': request})
-            response_data = serializer.data
-
-            cache.set(cache_key, response_data, timeout=60 * 10)
-
-            response = ResponseFactory.success(
-                response_data,
-                response_data
-            )
-            response['X-Cache'] = 'MISS'
-            return response
-        except Profile.DoesNotExist:
-            return ResponseFactory.not_found(
-                "Profile not found",
-                {"detail": "Profile not found."}
-            )
-        except Exception as e:
-            return ResponseFactory.bad_request(
-                f"An error occurred while processing the request: {str(e)}",
-                {"detail": f"An error occurred while processing the request."}
-            )
-
+        if is_following:
+            return Post.objects.filter(author=user).filter(privacy_type__in=['public', 'followers'])
+        else:
+            return Post.objects.filter(author=user, privacy_type='public')
+        
 class FollowView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -470,9 +425,9 @@ class FollowView(APIView):
                 cache.delete(f"following_{request.user.id}")
 
                 if isinstance(result, dict):
-                    return ResponseFactory.success('Unfollowed Successfully', {'Message': 'Unfollowed successfully'})
+                    return ResponseFactory.success('Unfollowed Successfully', {'is_following': False})
 
-                return ResponseFactory.created("Followed Successfully", {"Message": "Followed successfully"})
+                return ResponseFactory.created("Followed Successfully", {"is_following": True})
 
             return ResponseFactory.bad_request("Error", {"Error": serializer.errors})
 
@@ -487,4 +442,16 @@ class FollowView(APIView):
                 {"detail": str(e)}
             )
 
+class SuggestedUsersView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def get(self, request):
+        user = request.user
+
+        followings_ids = Follow.objects.filter(follower=user).values_list('followed_id', flat=True)
+        profiles = Profile.objects.exclude(Q(id__in=followings_ids) | Q(id=user.id))
+
+        to_follow = random.sample(list(profiles), min(5, profiles.count()))
+        serializer = UserSerializer(to_follow, many=True, context={'request': request})
+        
+        return ResponseFactory.success("Follow suggestions returned", serializer.data)
