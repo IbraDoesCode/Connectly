@@ -167,10 +167,10 @@ class CommentListView(ListAPIView):
             )
         
         # Get all comments for the post
-        comments = self.paginate_queryset(post.comments.all()) # Apply pagination
+        comments = self.paginate_queryset(post.comments.all().order_by('-created_at')) # Apply pagination
         
         # Convert QuerySet to JSON
-        serializer = CommentSerializer(comments, many=True)
+        serializer = CommentSerializer(comments, many=True, context={'request': request})
         
         # Return JSON data
         return ResponseFactory.success(serializer.data, self.get_paginated_response(serializer.data).data)
@@ -186,7 +186,7 @@ class CommentListView(ListAPIView):
             )
         
         # Take the data from the request and convert it to JSON
-        serializer = CommentSerializer(data=request.data)
+        serializer = CommentSerializer(data=request.data, context={'request': request})
         
         # Check if the data is valid
         if serializer.is_valid():
@@ -235,7 +235,7 @@ class CommentDetailView(APIView):
             )
 
         # Serialize and return the comment
-        serializer = CommentSerializer(comment)
+        serializer = CommentSerializer(comment, context={'request': request})
         return ResponseFactory.success(
             serializer.data,
             serializer.data
@@ -264,7 +264,7 @@ class CommentDetailView(APIView):
         self.check_object_permissions(request, comment)
 
         # Deserialize and update the comment
-        serializer = CommentSerializer(comment, data=request.data)
+        serializer = CommentSerializer(comment, data=request.data, context={'request': request})
         
         if serializer.is_valid():
             serializer.save()
@@ -348,41 +348,16 @@ class LikeCommentView(APIView):
         except Comment.DoesNotExist:
             return ResponseFactory.not_found('Comment not found', 
                                              {'message': 'Comment not found'})
-
-        if comment is None:
-            return ResponseFactory.not_found('Comment not found', 
-                                             {'message': 'Comment not found'})
-
+        
         user = request.user
         if comment.liked_by.filter(id=user.id).exists():
-            return ResponseFactory.conflict('Comment already liked', 
-                                            {'message': 'Comment already liked'})
-
-        comment.liked_by.add(user)
-        like_count = comment.liked_by.count()
-        return ResponseFactory.success('Comment successfully liked',
-                                       {'message': 'Comment successfully liked',
-                                        'like_count': like_count})
-
-    def delete(self, request, post_id, comment_id):
-        try:
-            comment = Comment.objects.get(pk=comment_id)
-        except Comment.DoesNotExist:
-            return ResponseFactory.not_found('Comment not found', 
-                                             {'message': 'Comment not found'})
-
-        if comment is None:
-            return ResponseFactory.not_found('Comment not found', 
-                                             {'message': 'Comment not found'})
-
-        user = request.user
-        if not comment.liked_by.filter(id=user.id).exists():
-            return ResponseFactory.conflict('Comment not liked', 
-                                            {'message': 'Comment not liked'})
-
-        comment.liked_by.remove(user)
-        like_count = comment.liked_by.count()
-        return ResponseFactory.deleted('Comment unliked', 
-                                       {'message': 'Comment unliked',
-                                        'like_count': like_count})
-
+            comment.liked_by.remove(user)
+            message = 'Comment unliked successfully'
+        else:
+            comment.liked_by.add(user)
+            message = 'Comment liked successfully'
+        
+        liked = comment.liked_by.filter(id=user.id).exists()
+        return ResponseFactory.success(message,
+                                        {'detail': message,
+                                        'liked': liked})
