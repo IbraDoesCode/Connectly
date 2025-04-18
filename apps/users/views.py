@@ -352,15 +352,15 @@ class ProfilePostsView(ListAPIView):
         user_id = self.kwargs.get('user_id')
         if user_id == str(self.request.user.id):
             user = self.request.user
-            return Post.objects.filter(author=user) 
+            return Post.objects.filter(author=user).order_by('-created_at')
         
         user = get_object_or_404(User, id=user_id)
         is_following = Follow.objects.filter(follower=self.request.user, followed=user).exists()
 
         if is_following:
-            return Post.objects.filter(author=user).filter(privacy_type__in=['public', 'followers'])
+            return Post.objects.filter(author=user).filter(privacy_type__in=['public', 'followers']).order_by('-created_at')
         else:
-            return Post.objects.filter(author=user, privacy_type='public')
+            return Post.objects.filter(author=user, privacy_type='public').order_by('-created_at')
         
 class FollowView(APIView):
     permission_classes = [IsAuthenticated]
