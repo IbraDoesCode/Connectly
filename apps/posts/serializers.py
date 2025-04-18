@@ -120,7 +120,7 @@ class PostFeedSerializer(serializers.ModelSerializer):
 
     def get_comments(self, obj):
         preview_comments = obj.comments.all()[:3]
-        return CommentSerializer(preview_comments, many=True).data
+        return CommentSerializer(preview_comments, many=True, context=self.context).data
 
     def get_media(self, obj):
         media_queryset = Media.objects.filter(
