@@ -2,6 +2,8 @@
 from django.db.models import Q
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from apps.medias.models import Media
+from django.contrib.contenttypes.models import ContentType
 from utils.response_factory import ResponseFactory
 from .models import Post, Comment
 from ..users.models import Follow
@@ -130,26 +132,24 @@ class PostDetailView(APIView):
 
     def delete(self, request, post_id):
         try:
-            # Get specified post based on primary key
             post = Post.objects.get(pk=post_id)
-
-            # Check authentication and permissions
             self.check_object_permissions(request, post)
 
-            # Delete the post from the db
+            # Delete associated media files before deleting the post
+            media = Media.objects.filter(content_type=ContentType.objects.get_for_model(post), object_id=post.id)
+            for media_file in media:
+                media_file.file.delete(save=False)  # Deleting the file from the storage
+
+            #delete the media records from the database
+            media.delete()
+
+            # Delete the post itself
             post.delete()
 
-            # Return an ok response
-            return ResponseFactory.deleted(
-                "Post deleted successfully",
-                {'Message': 'Post deleted successfully'}
-            )
+            return ResponseFactory.deleted("Post deleted successfully", {'Message': 'Post deleted successfully'})
+
         except Post.DoesNotExist:
-            # Throw an error if the post with the specified id is not found
-            return ResponseFactory.not_found(
-                "Error deleting post",
-                {'Message': 'Post not found'}
-            )
+            return ResponseFactory.not_found("Error deleting post", {'Message': 'Post not found'})
 
 # Comment List View for a specific post
 class CommentListView(ListAPIView):
