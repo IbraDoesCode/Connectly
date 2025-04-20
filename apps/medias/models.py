@@ -10,9 +10,21 @@ from django.utils.deconstruct import deconstructible
 @deconstructible
 class UploadToPath:
     def __call__(self, instance, filename):
+        # Get the extension of the uploaded file
         ext = filename.split('.')[-1]
+        # Create a new unique filename
         new_filename = f"{uuid.uuid4()}.{ext}"
-        return os.path.join("", new_filename)
+        
+        # Check the media_type of the instance to choose the correct subdirectory
+        if instance.media_type == 'image':
+            subdirectory = 'post_images'
+        elif instance.media_type == 'video':
+            subdirectory = 'post_videos'
+        else:
+            subdirectory = 'other_media'
+
+        # Return the full path (media_root/subdirectory/filename)
+        return os.path.join(subdirectory, new_filename)
 
 
 # Create your models here.
