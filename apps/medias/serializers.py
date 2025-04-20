@@ -64,7 +64,7 @@ class MediaSerializer(serializers.ModelSerializer):
             compressed_file = MediaCompressor.compress_image(file)
             metadata = MediaCompressor.extract_image_metadata(compressed_file)
         elif media_type == 'video':
-            compressed_file = MediaCompressor.compress_image(file)
+            compressed_file = MediaCompressor.compress_video(file)
             metadata = MediaCompressor.extract_video_metadata(compressed_file)
         else:
             raise serializers.ValidationError('Unsupported media type')
