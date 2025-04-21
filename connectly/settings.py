@@ -230,10 +230,4 @@ CACHES = {
     }
 }
 
-CLOUDINARY_STORAGE = {
-  'CLOUD_NAME': 'REMOVED',
-  'API_KEY': 'REMOVED',
-  'API_SECRET': 'REMOVED'
-}
-
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
