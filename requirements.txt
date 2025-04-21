@@ -14,3 +14,5 @@ Pillow
 ffmpeg-python
 django-allauth
 python-dotenv
+cloudinary
+django-cloudinary-storage

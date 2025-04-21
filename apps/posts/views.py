@@ -1,4 +1,5 @@
 # Create your views here.
+import cloudinary
 from django.db.models import Q
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -135,21 +136,30 @@ class PostDetailView(APIView):
             post = Post.objects.get(pk=post_id)
             self.check_object_permissions(request, post)
 
-            # Delete associated media files before deleting the post
-            media = Media.objects.filter(content_type=ContentType.objects.get_for_model(post), object_id=post.id)
+            media = Media.objects.filter(
+                content_type=ContentType.objects.get_for_model(post),
+                object_id=post.id
+            )
+
             for media_file in media:
-                media_file.file.delete(save=False)  # Deleting the file from the storage
+                try:
+                    public_id = getattr(media_file.file, 'public_id', str(media_file.file))
+                    resource_type = 'video' if media_file.media_type == 'video' else 'image'
+                    cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+                except Exception as e:
+                    return ResponseFactory.internal_server_error(
+                        "Failed to delete Cloudinary file",
+                        {'detail': f"Failed to delete Cloudinary file: {public_id} - {str(e)}"}
+                    )
 
-            #delete the media records from the database
             media.delete()
-
-            # Delete the post itself
             post.delete()
 
             return ResponseFactory.deleted("Post deleted successfully", {'Message': 'Post deleted successfully'})
 
         except Post.DoesNotExist:
             return ResponseFactory.not_found("Error deleting post", {'Message': 'Post not found'})
+
 
 # Comment List View for a specific post
 class CommentListView(ListAPIView):

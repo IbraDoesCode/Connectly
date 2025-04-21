@@ -52,7 +52,9 @@ INSTALLED_APPS = [
     'apps.posts',
     'apps.users',
     'apps.medias',
-    'connectly'
+    'connectly',
+    'cloudinary_storage',
+    'cloudinary'
 ]
 
 MIDDLEWARE = [
@@ -227,3 +229,5 @@ CACHES = {
         'LOCATION': 'connectly',
     }
 }
+
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
