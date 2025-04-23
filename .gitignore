@@ -2,3 +2,17 @@
 db.sqlite3
 __pycache__/
 *.pyc
+.idea
+
+# Ignore all certs and keys from OpenSSL
+private.key
+key.pem
+cert.*
+develop
+tests_report.html
+tests_report.pdf
+/.vscode
+/media
+
+# Ignore environment file
+.env
