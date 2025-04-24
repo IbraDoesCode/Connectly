@@ -19,10 +19,12 @@ class UserSerializer(serializers.ModelSerializer):
     posts_count = serializers.SerializerMethodField(read_only=True)
     followers = serializers.SerializerMethodField(read_only=True)
     following = serializers.SerializerMethodField(read_only=True)
+    profile_image = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
-        fields = ['id', 'username', 'email', 'password', 'first_name', 'last_name', 'bio', 'full_name', 'is_following', 'created_at', 'posts_count', 'followers', 'following']
+        fields = ['id', 'username', 'email', 'password', 'first_name', 'last_name', 'bio', 'full_name', 'is_following', 'created_at', 'posts_count', 'followers', 'following', 'profile_image', 'cover_image']
         read_only_fields = ['id', 'full_name']
 
     def get_full_name(self, obj):
@@ -40,6 +42,12 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_following(self, obj):
         return Follow.objects.filter(follower=obj.user).count()
+    
+    def get_profile_image(self, obj):
+        return obj.profile_image.url if obj.profile_image else None
+    
+    def get_cover_image(self, obj):
+        return obj.cover_image.url if obj.cover_image else None
 
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():
@@ -107,16 +115,17 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ['id', 'user', 'first_name', 'last_name', 'bio']
+        fields = ['id', 'user', 'first_name', 'last_name', 'bio', 'profile_image', 'cover_image']
 
 
 class ProfileBasicSerializer(serializers.ModelSerializer):
     username = serializers.ReadOnlyField(source='user.username')
     full_name = serializers.SerializerMethodField(read_only=True)
+    profile_image = serializers.ImageField(read_only=True)
 
     class Meta:
         model = Profile
-        fields = ['id', 'username', 'full_name']
+        fields = ['id', 'username', 'full_name', 'profile_image']
 
     def get_full_name(self, obj):
         return f'{obj.first_name} {obj.last_name}'
