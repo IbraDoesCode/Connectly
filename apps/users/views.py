@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from django.db.models import Q, Value
 from django.core.cache import cache
 from django.db.models.functions import Concat
+from cloudinary.uploader import destroy
 from apps.posts.models import Comment, Post
 from apps.posts.permissions import IsAuthor
 from apps.posts.serializers import CommentSerializer, PostSerializer, PostFeedSerializer
@@ -289,7 +290,25 @@ class ProfileDetailView(APIView):
                     "Error while updating the profile",
                     serializer.errors
                 )
-                
+
+            if 'profile_image' in request.data and request.data['profile_image']:
+                if user.profile_image:
+                    image_id = user.profile_image.public_id
+                    try:
+                        destroy(image_id)
+                    except Exception as e:
+                        return ResponseFactory.internal_server_error('Error deleting image from cloduinary', 
+                            {'detail': str(e)})
+                    
+            if 'cover_image' in request.data and request.data['cover_image']:
+                if user.cover_image:
+                    image_id = user.cover_image.public_id
+                    try:
+                        destroy(image_id)
+                    except Exception as e:
+                        return ResponseFactory.internal_server_error('Error deleting image from cloduinary', 
+                            {'detail': str(e)})
+
             # Check if provided data is identical to current user data
             if all(getattr(user, field) == value for field, value in request.data.items()):
                 return ResponseFactory.bad_request(
