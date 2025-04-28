@@ -2,15 +2,9 @@ import os
 from django.db import IntegrityError
 from django.db.models.signals import post_migrate
 from django.contrib.auth.models import User, Group
-from apps.users.factories import UserFactory
 from apps.users.models import Profile
 from django.dispatch import receiver
-from allauth.account.signals import user_signed_up
-from rest_framework_simplejwt.tokens import RefreshToken
-from apps.users.serializers import UserSerializer
 from utils.logger import Logger
-from allauth.socialaccount.models import SocialApp
-from django.contrib.sites.models import Site
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -92,43 +86,4 @@ def create_default_admin(sender, **kwargs):
         except Exception as e:
             logger.error(f"❌ Error creating default admin: {e}")
 
-@receiver(post_migrate)
-def create_google_oauth_app(sender, **kwargs):
-    if sender.name == "allauth":
-        try:
-            # Ensure localhost exists
-            site_localhost, _ = Site.objects.get_or_create(domain="localhost", defaults={"name": "Localhost"})
-            # Ensure 127.0.0.1 exists
-            site_127, _ = Site.objects.get_or_create(domain="127.0.0.1", defaults={"name": "Localhost (127.0.0.1)"})
-
-            # Create Google OAuth Social Application
-            google_app, created = SocialApp.objects.get_or_create(
-                provider="google",
-                name="Google OAuth",
-                defaults={
-                    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-                    "secret": os.getenv("GOOGLE_CLIENT_SECRET")
-                },
-            )
-
-            # Assign both sites to the Google OAuth app
-            google_app.sites.add(site_localhost, site_127)
-
-            if created:
-                logger.info("✅ Google OAuth Social Application created successfully")
-            else:
-                logger.info("Google OAuth Social Application already exists")
-
-        except IntegrityError as e:
-            logger.error(f"Database integrity error while creating Google OAuth App: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error while creating Google OAuth App: {e}")
-            
-@receiver(user_signed_up)
-def create_user_profile(user, **kwargs):
-    """
-    Signal triggered when a user logs in via Google OAuth.
-    Calls UserFactory to ensure a Profile is created.
-    """
-    UserFactory.create_profile_for_existing_user(user)
     
