@@ -276,14 +276,68 @@ class ProfileDetailView(APIView):
     def patch(self, request, user_id=None):
         try:
             user = Profile.objects.get(user=request.user)
-            serializer = ProfileSerializer(user, data=request.data, partial=True)
-            
-            # Check if request body is empty
-            if not request.data:
+            data = request.data.copy()
+
+            if not data:
                 return ResponseFactory.bad_request(
                     "No changes were provided.",
                     {"detail": "Request body is empty. Provide at least one field to update."}
                 )
+
+            image_data = data.get('profile_image')
+            if image_data is not None:
+                # If profile image is marked for deletion
+                if image_data == 'delete':
+                    # If user has a profile image
+                    if user.profile_image:
+                        # Delete current profile_image from cloudinary
+                        try:
+                            destroy(user.profile_image.public_id)
+                        except Exception as e:
+                            return ResponseFactory.internal_server_error(
+                                "Error deleting image from Cloudinary",
+                                {"detail": str(e)}
+                            )
+                    # Remove user profile image data from database
+                    user.profile_image = None
+                    #  Remove profile_image from request
+                    data.pop('profile_image')
+
+                # If new image is uploaded
+                else:
+                    # If user has a profile_image
+                    if user.profile_image:
+                        # Delete current profile_image from cloudinary
+                        try:
+                            destroy(user.profile_image.public_id)
+                        except Exception as e:
+                            return ResponseFactory.internal_server_error(
+                                "Error deleting image from Cloudinary",
+                                {"detail": str(e)})
+            
+            cover_image_data = data.get('cover_image')
+            if cover_image_data is not None:
+                if cover_image_data == 'delete':
+                    if user.cover_image:
+                        try:
+                            destroy(user.cover_image.public_id)
+                        except Exception as e:
+                            return ResponseFactory.internal_server_error(
+                                "Error deleting image from Cloudinary",
+                                {"detail": str(e)}
+                            )
+                    user.cover_image = None
+                    data.pop('cover_image')
+                else:
+                    if user.cover_image:
+                        try:
+                            destroy(user.cover_image.public_id)
+                        except Exception as e:
+                            return ResponseFactory.internal_server_error(
+                                "Error deleting image from Cloudinary",
+                                {"detail": str(e)})
+
+            serializer = ProfileSerializer(user, data=data, partial=True)
 
             if not serializer.is_valid():
                 return ResponseFactory.bad_request(
@@ -291,44 +345,23 @@ class ProfileDetailView(APIView):
                     serializer.errors
                 )
 
-            if 'profile_image' in request.data and request.data['profile_image']:
-                if user.profile_image:
-                    image_id = user.profile_image.public_id
-                    try:
-                        destroy(image_id)
-                    except Exception as e:
-                        return ResponseFactory.internal_server_error('Error deleting image from cloduinary', 
-                            {'detail': str(e)})
-                    
-            if 'cover_image' in request.data and request.data['cover_image']:
-                if user.cover_image:
-                    image_id = user.cover_image.public_id
-                    try:
-                        destroy(image_id)
-                    except Exception as e:
-                        return ResponseFactory.internal_server_error('Error deleting image from cloduinary', 
-                            {'detail': str(e)})
-
-            # Check if provided data is identical to current user data
-            if all(getattr(user, field) == value for field, value in request.data.items()):
-                return ResponseFactory.bad_request(
-                    "No changes detected.",
-                    {"detail": "Provided values are the same as the current user data."}
-                )
-
             serializer.save()
+            user.save()
+
             cache.delete(f"profile_{request.user.id}")
-            cache.delete(f"profile_me")
+            cache.delete("profile_me")
+
             return ResponseFactory.success(
                 "Profile updated successfully",
                 serializer.data
             )
+
         except Profile.DoesNotExist:
             return ResponseFactory.not_found(
                 "Profile not found",
                 {"detail": "User not found."}
             )
-
+        
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -468,7 +501,8 @@ class SuggestedUsersView(APIView):
         user = request.user
 
         followings_ids = Follow.objects.filter(follower=user).values_list('followed_id', flat=True)
-        profiles = Profile.objects.exclude(Q(id__in=followings_ids) | Q(id=user.id))
+        exclude_ids = list(followings_ids) + [user.id, 1]
+        profiles = Profile.objects.exclude(Q(id__in=exclude_ids))
 
         to_follow = random.sample(list(profiles), min(5, profiles.count()))
         serializer = UserSerializer(to_follow, many=True, context={'request': request})
