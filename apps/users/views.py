@@ -110,7 +110,7 @@ class UserUpdateView(APIView):
                 {"detail": "An error occurred when deleting the user."}
             )
 
-class UserRegistrationView(APIView):
+class UserSignupView(APIView):
     def post(self, request):
         serializer = UserSerializer(data=request.data)
 
