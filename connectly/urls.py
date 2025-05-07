@@ -22,7 +22,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from apps.users.urls import profile_patterns
-from .views import  GoogleLoginView, LogoutView
+from .views import  GoogleVerifyTokenView, LogoutView, CompleteSignupView
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -33,7 +33,8 @@ urlpatterns = [
     path('users/', include('apps.users.urls')),
     path('profiles/', include((profile_patterns, 'apps.users.urls'), namespace='profiles')),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'), #This will be called by the client to refresh the token
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('logout/', LogoutView.as_view(), name='logout'),
-    path('auth/google/', GoogleLoginView.as_view(), name='google_login')
+    path('google/signin/', GoogleVerifyTokenView.as_view(), name='google_signin'),
+    path('google/complete-signup/', CompleteSignupView.as_view(), name='google_complete_signup')
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
