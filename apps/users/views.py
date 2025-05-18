@@ -16,8 +16,7 @@ from utils.response_factory import ResponseFactory
 from .factories import UserFactory
 from .models import Profile, Follow
 from .permissions import IsAdmin, IsOwnerOrAdmin
-from .serializers import ProfileSearchSerializer, ProfileSerializer, UserSerializer, RoleSerializer, \
-    UserUpdateSerializer, FollowListSerializer
+from .serializers import ProfileBasicSerializer, ProfileSearchSerializer, ProfileSerializer, UserSerializer, RoleSerializer, UserUpdateSerializer
 from rest_framework.generics import ListAPIView
 from .serializers import ProfileSearchSerializer, UserSerializer, RoleSerializer, FollowSerializer # UnfollowSerializer
 import random
@@ -421,37 +420,25 @@ class FollowView(APIView):
         try:
             query_type = request.query_params.get('type', None)
 
-            if query_type not in ['following', 'follower']:
+            if query_type not in ['following', 'followers']:
                 return ResponseFactory.bad_request(
                     "Invalid type",
-                    {"detail": "Invalid type. Use 'following' or 'follower'."}
+                    {"detail": "Invalid type. Use 'following' or 'followers'."}
                 )
-            
-            cache_key = f"{query_type}_{user_id}"
-            cached_data = cache.get(cache_key)
-
-            if cached_data:
-                response = ResponseFactory.success(cached_data, cached_data)
-                response['X-Cache'] = 'HIT'
-                return response
-
+        
             user = User.objects.get(id=user_id)
+            if query_type == 'followers':
+                users = User.objects.filter(following__followed=user)
+            else:  
+                users = User.objects.filter(followers__follower=user)
 
-            if query_type == 'follower':
-                queryset = Follow.objects.filter(followed=user)
-            else:
-                queryset = Follow.objects.filter(follower=user)
-
-            serializer = FollowListSerializer(queryset, many=True, context={"request": request})
-            response_data = serializer.data
-
-            cache.set(cache_key, response_data, timeout=60 * 10)
-
+            profiles = Profile.objects.filter(user__in=users)
+            serializer = ProfileBasicSerializer(profiles, many=True)
+            
             response = ResponseFactory.success(
-                response_data,
-                response_data
+                serializer.data,
+                serializer.data
             )
-            response['X-Cache'] = 'MISS'
             return response
 
         except User.DoesNotExist:
@@ -464,7 +451,6 @@ class FollowView(APIView):
                 "Error retrieving followers",
                 {"detail": str(e)}
             )
-
 
     def post(self, request, user_id):
         try:
