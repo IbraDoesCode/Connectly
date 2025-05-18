@@ -3,7 +3,6 @@ django-extensions
 djangorestframework
 drf-yasg
 django-cors-headers
-django-extensions
 Werkzeug
 pyOpenSSL
 bcrypt
@@ -11,7 +10,6 @@ djangorestframework-simplejwt
 pytest
 pytest-django
 Pillow
-ffmpeg-python
 python-dotenv
 cloudinary
 django-cloudinary-storage
